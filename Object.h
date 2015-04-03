@@ -4,7 +4,8 @@
 	> Mail: chengfeizh@gmail.com
 	> Created Time: 2015年03月31日 星期二 11时04分01秒
  ************************************************************************/
-
+//here
+//what
 #ifndef _OBJECT_H
 #define _OBJECT_H
 #endif
