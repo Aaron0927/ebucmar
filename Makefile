@@ -117,9 +117,11 @@ am__memcached_SOURCES_DIST = memcached.c memcached.h hash.c hash.h \
 	slabs.c slabs.h items.c items.h assoc.c assoc.h thread.c \
 	daemon.c stats.c stats.h util.c util.h trace.h cache.h \
 	sasl_defs.h ramcube.c ramcube.h Object.c Object.h Segment.c \
-	Segment.h Log.c Log.h cache.c solaris_priv.c sasl_defs.c
+	Segment.h Log.c Log.h Storage.c Storage.h cache.c \
+	solaris_priv.c sasl_defs.c
 am__objects_1 = memcached-ramcube.$(OBJEXT) memcached-Object.$(OBJEXT) \
-	memcached-Segment.$(OBJEXT) memcached-Log.$(OBJEXT)
+	memcached-Segment.$(OBJEXT) memcached-Log.$(OBJEXT) \
+	memcached-Storage.$(OBJEXT)
 am__objects_2 = memcached-cache.$(OBJEXT)
 #am__objects_3 =  \
 #	memcached-solaris_priv.$(OBJEXT)
@@ -136,12 +138,13 @@ am__memcached_debug_SOURCES_DIST = memcached.c memcached.h hash.c \
 	hash.h slabs.c slabs.h items.c items.h assoc.c assoc.h \
 	thread.c daemon.c stats.c stats.h util.c util.h trace.h \
 	cache.h sasl_defs.h ramcube.c ramcube.h Object.c Object.h \
-	Segment.c Segment.h Log.c Log.h cache.c solaris_priv.c \
-	sasl_defs.c
+	Segment.c Segment.h Log.c Log.h Storage.c Storage.h cache.c \
+	solaris_priv.c sasl_defs.c
 am__objects_5 = memcached_debug-ramcube.$(OBJEXT) \
 	memcached_debug-Object.$(OBJEXT) \
 	memcached_debug-Segment.$(OBJEXT) \
-	memcached_debug-Log.$(OBJEXT)
+	memcached_debug-Log.$(OBJEXT) \
+	memcached_debug-Storage.$(OBJEXT)
 am__objects_6 = memcached_debug-cache.$(OBJEXT)
 #am__objects_7 = memcached_debug-solaris_priv.$(OBJEXT)
 #am__objects_8 = memcached_debug-sasl_defs.$(OBJEXT)
@@ -329,7 +332,7 @@ AUTOMAKE = automake-1.14
 AWK = gawk
 CC = gcc -std=gnu99
 CCDEPMODE = depmode=gcc3
-CFLAGS = -g -O0 -pthread -pthread -Wall -Werror -pedantic -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -fno-strict-aliasing
+CFLAGS = -g -O2 -pthread -pthread -Wall -Werror -pedantic -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -fno-strict-aliasing
 CPP = gcc -E
 CPPFLAGS = -I/usr/lib/x86_64-linux-gnu 
 CYGPATH_W = echo
@@ -441,7 +444,8 @@ memcached_SOURCES = memcached.c memcached.h hash.c hash.h slabs.c \
 RAMCUBE_SOURCES = ramcube.c ramcube.h \
 				  Object.c Object.h \
 				  Segment.c Segment.h \
-				  Log.c Log.h 
+				  Log.c Log.h \
+				  Storage.c Storage.h
 
 memcached_debug_SOURCES = $(memcached_SOURCES)
 memcached_CPPFLAGS = -DNDEBUG
@@ -585,6 +589,7 @@ include ./$(DEPDIR)/cache.Po
 include ./$(DEPDIR)/memcached-Log.Po
 include ./$(DEPDIR)/memcached-Object.Po
 include ./$(DEPDIR)/memcached-Segment.Po
+include ./$(DEPDIR)/memcached-Storage.Po
 include ./$(DEPDIR)/memcached-assoc.Po
 include ./$(DEPDIR)/memcached-cache.Po
 include ./$(DEPDIR)/memcached-daemon.Po
@@ -601,6 +606,7 @@ include ./$(DEPDIR)/memcached-util.Po
 include ./$(DEPDIR)/memcached_debug-Log.Po
 include ./$(DEPDIR)/memcached_debug-Object.Po
 include ./$(DEPDIR)/memcached_debug-Segment.Po
+include ./$(DEPDIR)/memcached_debug-Storage.Po
 include ./$(DEPDIR)/memcached_debug-assoc.Po
 include ./$(DEPDIR)/memcached_debug-cache.Po
 include ./$(DEPDIR)/memcached_debug-daemon.Po
@@ -814,6 +820,20 @@ memcached-Log.obj: Log.c
 #	$(AM_V_CC)source='Log.c' object='memcached-Log.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-Log.obj `if test -f 'Log.c'; then $(CYGPATH_W) 'Log.c'; else $(CYGPATH_W) '$(srcdir)/Log.c'; fi`
+
+memcached-Storage.o: Storage.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-Storage.o -MD -MP -MF $(DEPDIR)/memcached-Storage.Tpo -c -o memcached-Storage.o `test -f 'Storage.c' || echo '$(srcdir)/'`Storage.c
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-Storage.Tpo $(DEPDIR)/memcached-Storage.Po
+#	$(AM_V_CC)source='Storage.c' object='memcached-Storage.o' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-Storage.o `test -f 'Storage.c' || echo '$(srcdir)/'`Storage.c
+
+memcached-Storage.obj: Storage.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-Storage.obj -MD -MP -MF $(DEPDIR)/memcached-Storage.Tpo -c -o memcached-Storage.obj `if test -f 'Storage.c'; then $(CYGPATH_W) 'Storage.c'; else $(CYGPATH_W) '$(srcdir)/Storage.c'; fi`
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-Storage.Tpo $(DEPDIR)/memcached-Storage.Po
+#	$(AM_V_CC)source='Storage.c' object='memcached-Storage.obj' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-Storage.obj `if test -f 'Storage.c'; then $(CYGPATH_W) 'Storage.c'; else $(CYGPATH_W) '$(srcdir)/Storage.c'; fi`
 
 memcached-cache.o: cache.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-cache.o -MD -MP -MF $(DEPDIR)/memcached-cache.Tpo -c -o memcached-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c
@@ -1038,6 +1058,20 @@ memcached_debug-Log.obj: Log.c
 #	$(AM_V_CC)source='Log.c' object='memcached_debug-Log.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-Log.obj `if test -f 'Log.c'; then $(CYGPATH_W) 'Log.c'; else $(CYGPATH_W) '$(srcdir)/Log.c'; fi`
+
+memcached_debug-Storage.o: Storage.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-Storage.o -MD -MP -MF $(DEPDIR)/memcached_debug-Storage.Tpo -c -o memcached_debug-Storage.o `test -f 'Storage.c' || echo '$(srcdir)/'`Storage.c
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-Storage.Tpo $(DEPDIR)/memcached_debug-Storage.Po
+#	$(AM_V_CC)source='Storage.c' object='memcached_debug-Storage.o' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-Storage.o `test -f 'Storage.c' || echo '$(srcdir)/'`Storage.c
+
+memcached_debug-Storage.obj: Storage.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-Storage.obj -MD -MP -MF $(DEPDIR)/memcached_debug-Storage.Tpo -c -o memcached_debug-Storage.obj `if test -f 'Storage.c'; then $(CYGPATH_W) 'Storage.c'; else $(CYGPATH_W) '$(srcdir)/Storage.c'; fi`
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-Storage.Tpo $(DEPDIR)/memcached_debug-Storage.Po
+#	$(AM_V_CC)source='Storage.c' object='memcached_debug-Storage.obj' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-Storage.obj `if test -f 'Storage.c'; then $(CYGPATH_W) 'Storage.c'; else $(CYGPATH_W) '$(srcdir)/Storage.c'; fi`
 
 memcached_debug-cache.o: cache.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-cache.o -MD -MP -MF $(DEPDIR)/memcached_debug-cache.Tpo -c -o memcached_debug-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c

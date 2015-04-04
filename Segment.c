@@ -188,3 +188,24 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
     }
 
 }
+
+//++++++++++++++++++++++++++++++++++ storage ++++++++++++++++++++++++++++++++++++++++++//
+
+int persist(Segment *seg) {
+    FILE *fp;
+    time_t t;
+    time(&t); //! add time after filename
+    char filename[40];
+    strcpy(filename, seg->header.sin_addr);
+    strcpy(filename, ":");
+    strcpy(filename, ":");
+
+    if((fp = fopen("10.107.19.8:1000:1","wb"))==NULL)
+    { /*以二进制只写方式打开文件*/
+        printf("cannot open file");
+        exit(0);
+    }
+
+    fwrite(class01,sizeof(Class) + sizeof(Stu) * 2,1,fp1); /* 成块写入文件*/
+    fclose(fp1);
+}

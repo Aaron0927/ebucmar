@@ -22,7 +22,8 @@ memcached_SOURCES = memcached.c memcached.h \
 RAMCUBE_SOURCES = ramcube.c ramcube.h \
 				  Object.c Object.h \
 				  Segment.c Segment.h \
-				  Log.c Log.h 
+				  Log.c Log.h \
+				  Storage.c Storage.h
 memcached_SOURCES += $(RAMCUBE_SOURCES)
 
 if BUILD_CACHE

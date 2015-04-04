@@ -11,6 +11,7 @@
 #include "Object.h"
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include "Storage.h"
 #define MAX_SEGMENT_LENGTH 1024 * 1024
 /**
  * the Segment structure as follows:
@@ -74,4 +75,8 @@ Segment *createSegment(void);
 Segment *getSegment(SegmentManager *manager, char *ip, int port);
 Seglet *createSeglet(char *command);
 Segment *getLastSegment(SegmentManager *manager);
+
+
+//++++++++++++++++++++++++++++++++++ storage ++++++++++++++++++++++++++++++++++++++++++//
+int persist(Segment *seg);
 
