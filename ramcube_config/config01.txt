@@ -1,0 +1,5 @@
+me localhost#11111
+pings localhost#11112
+pings localhost#11113
+backups localhost#11114
+result_file result01.txt

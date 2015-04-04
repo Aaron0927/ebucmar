@@ -1,0 +1,107 @@
+#include <stdio.h>
+
+#include "memcached.h"
+#include "ramcube.h"
+
+
+//vpBackupNames and vpBackupOut might change to arrays
+// for consistent hash. for that, we should have a fixed name-to-index mapping
+//vector<SOCKADDR_IN *> vpBackupSins, vpPingSins;
+
+
+
+
+
+
+
+
+
+int init_smaller_proxies(struct event_base *, enum proxy_type);
+
+
+void ramcube_adjust_memcached_settings(settings_s *p)
+{	
+	p->num_threads = 1; // ramcube prefer to single-threaded model	
+
+}
+
+void ramcube_init(struct event_base *main_base)
+{
+	printf("ramcube_init() called.\n");
+	init_smaller_proxies(main_base, PROXY_TYPE_PING_CLIENT);
+	
+
+}
+
+/* Here we only init smaller backups. Bigger ones are inited after accepting corresponding conn requests*/
+int init_smaller_proxies(struct event_base *pBase, enum proxy_type type)
+{
+/*
+	//vector<SOCKADDR_IN *> *pvpSin = NULL;
+	SOCKADDR_IN **pvpSin = NULL;
+	
+	char *strBackup = "BACKUP", *strPing = "PING";
+	char *typeStr = NULL;
+
+	if (type == PROXY_TYPE_BACKUP_CLIENT) {
+		pvpSin = &vpBackupSins;
+		typeStr = strBackup;
+	} 
+	else if (type == PROXY_TYPE_PING_CLIENT){
+		pvpSin = &vpPingSins;
+		typeStr = strPing;
+	} 
+	else{
+		printf ("ERROR: wrong proxy type (%d)\n", type);
+		return -1;
+	}
+
+	vector<SOCKADDR_IN *>::iterator sinIter;
+	//printf("pvpSin size: %d\n", pvpSin->size());
+	for (sinIter = pvpSin->begin(); sinIter!= pvpSin->end(); sinIter++) {
+		char name[100];
+		strcpy(name, inet_ntoa((*sinIter)->sin_addr));
+		int port = ntohs((*sinIter)->sin_port);
+		//printf("%s (%s:%d), me (%s:%d)\n", typeStr, name, port, myAddr, myPort);
+
+		in_addr sMyAddr = {0}, sPeerAddr = {0};
+		inet_aton(config.myAddr, &sMyAddr);
+		inet_aton(name, &sPeerAddr);
+
+		int iMyAddr = sMyAddr.S_un.S_un_b.s_b4;
+		int iPeerAddr = sPeerAddr.S_un.S_un_b.s_b4;
+
+		int iCompareResult = inet_addr_compare(config.myAddr, config.myPort, name, port);
+
+		//_strlwr_s(name, strlen(name)+1);
+		if (iCompareResult > 0)
+		{
+			printf("Let me connect to my %s (%s:%d).\n", typeStr, name, port);
+			//needInit = true;
+		}
+		else if (iCompareResult < 0)
+		{
+			printf("%s peer (%s:%d) is greater than me (%s:%d), so I won't connect to him until he connects to me.\n", 
+				typeStr, name, port, config.myAddr, config.myPort);
+			//needInit = false;
+			continue;
+		} 
+		else
+		{
+			printf("ERROR: %s peer (%s:%d) is the same as me (%s:%d).\n", typeStr, name, port, config.myAddr, config.myPort);
+			continue;
+		}
+
+		ConnProxy *cp = new ConnProxy();
+		if (connect_and_init(pBase, cp, *(sinIter), type) == -1){
+			delete cp;
+			return -1;
+		}
+	}
+*/
+	return 0;
+}
+
+
+
+

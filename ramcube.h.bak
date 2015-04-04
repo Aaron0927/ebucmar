@@ -1,0 +1,24 @@
+/* ramcube related codes */
+#ifndef RAMCUBE_H
+#define RAMCUBE_H
+
+enum proxy_type {
+	PROXY_TYPE_DATA,
+	PROXY_TYPE_PING_CLIENT, 	//ping tx
+	PROXY_TYPE_PING_SERVER,
+	PROXY_TYPE_BACKUP_CLIENT,	//backup tx
+	PROXY_TYPE_BACKUP_SERVER,
+	PROXY_TYPE_RECOVERY_CLIENT,
+	PROXY_TYPE_RECOVERY_SERVER,
+	PROXY_TYPE_UNKNOWN,
+	PROXY_TYPE_NUMBER
+};
+
+typedef struct settings settings_s;
+typedef struct sockaddr_in SOCKADDR_IN;
+
+void ramcube_adjust_memcached_settings(settings_s *);
+void ramcube_init(struct event_base *);
+
+
+#endif // #ifndef RAMCUBE_H

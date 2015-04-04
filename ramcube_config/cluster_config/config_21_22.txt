@@ -1,0 +1,3 @@
+me 10.107.21.22#11141
+backups 10.107.21.21#11131
+result_file result_21_22.txt
