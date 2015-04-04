@@ -714,7 +714,8 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 		assert(cp->data_conn_ptr);
 
         //! add by Aaron on 1th April 2015
-        appendToSegment(left_com);
+        appendToSegment(left_com); //receive data and store to memory
+
         return (ulong)cp->data_conn_ptr;  //! useful
 	} 
 	/*"BACKUP_REPLY" is intercepted by read_cb, so the following is useless*/

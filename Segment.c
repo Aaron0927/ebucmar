@@ -8,6 +8,8 @@
 #include<stdio.h>
 #include "Segment.h"
 #include <stdlib.h>
+#include <unistd.h>
+
 Segment* segHead;
 Seglet* letHead;
 SegmentManager *Manager;
@@ -49,6 +51,7 @@ void setHead(Segment* seg, char *ip, int port) {
     //! TODO
     //! need to set others
     seg->header.capacity = MAX_SEGMENT_CAPACITY;
+    seg->header.segletnum = 0;
     seg->header.used = true;
     seg->header.sin_addr = ip;
     seg->header.sin_port = port;
@@ -133,6 +136,14 @@ void setCapacity(Segment *seg ,int bits) {
     seg->header.capacity = seg->header.capacity - bits;
 }
 
+void setSegletNum(Segment *seg) {
+    ++seg->header.segletnum;
+}
+
+int getSegletNum(Segment *seg) {
+    return seg->header.segletnum;
+}
+
 Segment *getLastSegment(SegmentManager *manager) {
     Segment *iterator = manager->segment;
 
@@ -159,6 +170,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
         Iterator->segment->segleter = createSeglet(command);
         //! we only replace select length with command length roughly
         setCapacity(Iterator->segment, Iterator->segment->segleter->length);
+        setSegletNum(Iterator->segment);
         Iterator->segment->p = Iterator->segment->segleter;
         Iterator->segment->segleter->next = NULL;
     } else {
@@ -172,6 +184,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
             currSeg->next->segleter = createSeglet(command);
             //! we only replace select length with command length roughly
             setCapacity(currSeg->next, currSeg->next->segleter->length);
+            setSegletNum(Iterator->segment);
             currSeg->next->p = currSeg->next->segleter;
             currSeg->next->segleter->next = NULL;
         } else {
@@ -181,31 +194,56 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
             seglet->next = createSeglet(command);
             //! we only replace select length with command length roughly
             setCapacity(currSeg, seglet->next->length);
+            setSegletNum(Iterator->segment);
             seglet->next->next = NULL;
             currSeg->p = seglet->next;
         }
 
     }
 
+    //++++++++ storage strategy
+    //我们persist的策略是：我们先设定一个segment长度为8MB，直到存到某一次数据超错8MB，
+    //即最后segment的capacity数值<=64，64是经验值，已经存不下一个seglet。
+    //这个时候我们启动persist
+    Segment *segIterator = Manager->segment;
+    while(segIterator != NULL) {
+        if (segIterator->header.capacity <= 8388585) { //8388585 just for test
+            persist(Iterator->segment);
+        }
+        segIterator = segIterator->next;
+    }
+
 }
 
 //++++++++++++++++++++++++++++++++++ storage ++++++++++++++++++++++++++++++++++++++++++//
+
+/*
+ * move memory data to disk
+ * filename format just like : 10.107.19.8.11211:1024:1294201532
+ * IP.PORT : segletNum : time
+ */
 
 int persist(Segment *seg) {
     FILE *fp;
     time_t t;
     time(&t); //! add time after filename
-    char filename[40];
-    strcpy(filename, seg->header.sin_addr);
-    strcpy(filename, ":");
-    strcpy(filename, ":");
-
-    if((fp = fopen("10.107.19.8:1000:1","wb"))==NULL)
-    { /*以二进制只写方式打开文件*/
-        printf("cannot open file");
-        exit(0);
+    char filename[40] = "";
+    char temp[40] = "";
+    int segletNum = getSegletNum(seg);
+    strcat(filename, seg->header.sin_addr);
+    sprintf(temp, ".%d:%d:%ld", seg->header.sin_port, segletNum, t);
+    strcat(filename, temp);
+    if((fp = fopen(filename, "wb"))==NULL)
+    {
+        printf("Error to open!\n");
+        return -1;
     }
-
-    fwrite(class01,sizeof(Class) + sizeof(Stu) * 2,1,fp1); /* 成块写入文件*/
-    fclose(fp1);
+    int totalSize = sizeof(Segment) + (sizeof(Seglet) + sizeof(Object)) * segletNum;
+    fwrite(seg, totalSize,1,fp); /* 成块写入文件*/
+    if (fflush(fp) == 0) {
+        printf("successful!\n");
+    }
+    //sync();
+    fclose(fp);
+    return 0;
 }
