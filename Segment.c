@@ -7,11 +7,12 @@
 
 #include<stdio.h>
 #include "Segment.h"
-
+#include <stdlib.h>
 Segment* segHead;
 Seglet* letHead;
-SegmentManager Manager, *Iterator;
-
+SegmentManager *Manager;
+//! max segment is 8MB
+#define MAX_SEGMENT_CAPACITY 1024 * 1024 * 8
 /*
 Segment init_Segment(void) {
     Segment seg;
@@ -21,7 +22,9 @@ Segment init_Segment(void) {
 */
 
 void init_SegmentManager(void) {
-    memset(&Manager, 0, sizeof(Manager));
+    //memset(&Manager, 0, sizeof(Manager));
+    Manager = (SegmentManager *)malloc(sizeof(SegmentManager));
+    Manager->used = false;
     return;
 }
 
@@ -33,9 +36,8 @@ Segment *createSegment(void) {
 Seglet *createSeglet(char *command) {
     Seglet *let = (Seglet*)malloc(sizeof(Seglet));
     Object *obj = (Object*)malloc(sizeof(Object));
-
     obj->command = command;
-    obj->timestamp =
+    time(&obj->timestamp);
     obj->avaliable = true;
     let->length = strlen(command);
     let->objector = obj;
@@ -46,35 +48,47 @@ Seglet *createSeglet(char *command) {
 void setHead(Segment* seg, char *ip, int port) {
     //! TODO
     //! need to set others
-    seg->header.capacity = 1024;
+    seg->header.capacity = MAX_SEGMENT_CAPACITY;
     seg->header.used = true;
     seg->header.sin_addr = ip;
     seg->header.sin_port = port;
 }
 
 char *parseIpPort(char *cont) {
-    int len = strlen(cont) -1;
-    char str[64];// remove the last '\r\n'
+    int len = strlen(cont);
+    //revome the last '\r\n'
+    while(cont[len - 1] == '\r' || cont[len -1] == '\n') {
+        --len;
+    }
+    char *str = (char *)malloc(len + 1);
     memcpy(str, cont, len);
-    str[len - 1] = '\0';// carefully using memcpy
-    char *IpPort = strrchr(str, '\n');
-    IpPort += 1; // skip '\n'
-    return IpPort;
+    str[len] = '\0';
+    char *temp = strrchr(str, '\n');
+    temp += 1; //skip '\n'
+    strcpy(str, temp);
+    str[strlen(str)] = '\0';// carefully using memcpy, start from 0
+    return str;
 }
 
-char *parseCommand(char *cont, char *Iport) {
+char *parseCommand(const char *cont, char *Iport) {
+    int len = strlen(cont);
+    //revome the last '\r\n'
+    while(cont[len - 1] == '\r' || cont[len -1] == '\n') {
+        --len;
+    }
     //remove the tail, change the cont background
-    int len = strlen(cont) - strlen(Iport) - 2;
-    static char temp[1024];
-    memcpy(temp, cont, len);
-    temp[len] = '\0';
-    return temp;
+    len = len - strlen(Iport);
+    //! need to free
+    char *str = (char *)malloc(len + 1);
+    memcpy(str, cont, len);
+    str[len] = '\0';
+    return str;
 }
 
 
 
 char *getIp(char *cont) {
-    static char ip[20];
+    char *ip = (char *)malloc(sizeof(char) * 20);
     int i = 0;
     while (cont[i]!= ':') {
         i++;
@@ -102,47 +116,71 @@ int getPort(char *cont) {
 }
 
 Segment *getSegment(SegmentManager *manager, char *ip, int port) {
-    SegmentManager *iterator = manager;
-    while (iterator->segment->next != NULL) {
-        if (strcmp(iterator->segment->next->header.sin_addr, ip) == 0 && iterator->segment->next->header.sin_port == port) {
-            break;
+    Segment *iterator = manager->segment;
+
+    while (iterator != NULL) {
+        if (strcmp(iterator->header.sin_addr, ip) == 0 && iterator->header.sin_port == port) {
+            return iterator;
         } else {
-            iterator->segment->next = iterator->segment->next->next;
+            iterator = iterator->next;
         }
     }
-    return iterator->segment->next;
+    return iterator;
+}
+
+
+void setCapacity(Segment *seg ,int bits) {
+    seg->header.capacity = seg->header.capacity - bits;
+}
+
+Segment *getLastSegment(SegmentManager *manager) {
+    Segment *iterator = manager->segment;
+
+    while (iterator->next != NULL) {
+        iterator = iterator->next;
+    }
+    return iterator;
 }
 
 void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) {
-    Iterator = &Manager;
+    SegmentManager *Iterator = Manager;
     char *IpPort = parseIpPort(cont);
     char *rip = getIp(IpPort);
     int rport = getPort(IpPort);
     char *command = parseCommand(cont, IpPort);
-
+    free(IpPort);
 
     //! if no Segment avaliable, try to create
-    if (Iterator->segment == NULL) {
+    if (Iterator->used == false) {
         Iterator->segment = createSegment();
         Iterator->segment->next = NULL;
         setHead(Iterator->segment, rip, rport);
-        //Iterator->used = true; //! set current segment is using
+        Iterator->used = true; //! set current segment is using
         Iterator->segment->segleter = createSeglet(command);
-        Iterator->segment->p = &Iterator->segment->segleter;
+        //! we only replace select length with command length roughly
+        setCapacity(Iterator->segment, Iterator->segment->segleter->length);
+        Iterator->segment->p = Iterator->segment->segleter;
         Iterator->segment->segleter->next = NULL;
     } else {
         Segment *currSeg = getSegment(Iterator, rip, rport);
         if (currSeg == NULL) {
-            currSeg = createSegment();
-            currSeg->next = NULL;
-            setHead(currSeg, rip, rport);
+            currSeg = getLastSegment(Iterator);
+            currSeg->next = createSegment();
+            currSeg->next->next = NULL;
+            setHead(currSeg->next, rip, rport);
             //Iterator->used = true; //! set current segment is using
-            currSeg->segleter = createSeglet(command);
-            currSeg->p = &currSeg->segleter;
-            currSeg->segleter->next = NULL;
+            currSeg->next->segleter = createSeglet(command);
+            //! we only replace select length with command length roughly
+            setCapacity(currSeg->next, currSeg->next->segleter->length);
+            currSeg->next->p = currSeg->next->segleter;
+            currSeg->next->segleter->next = NULL;
         } else {
+            //! Ip existed so free it
+            free(rip);
             Seglet *seglet = currSeg->p;
             seglet->next = createSeglet(command);
+            //! we only replace select length with command length roughly
+            setCapacity(currSeg, seglet->next->length);
             seglet->next->next = NULL;
             currSeg->p = seglet->next;
         }

@@ -691,7 +691,7 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 	return 0;	//succeed
 }
 
-int ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *left_com)
+ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *left_com)
 {
 	assert(ramcube_config_file);
 	
@@ -715,8 +715,7 @@ int ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *left_
 
         //! add by Aaron on 1th April 2015
         appendToSegment(left_com);
-
-        return 2;
+        return (ulong)cp->data_conn_ptr;  //! useful
 	} 
 	/*"BACKUP_REPLY" is intercepted by read_cb, so the following is useless*/
 	else if (ntokens == 3 && strcmp(comm, "BACKUP_REPLY") == 0

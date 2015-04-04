@@ -90,7 +90,7 @@ static void conn_close(conn *c);
 static void conn_init(void);
 static bool update_event(conn *c, const int new_flags);
 static void complete_nread(conn *c);
-static int process_command(conn *c, char *command, char *left_com);
+static ulong process_command(conn *c, char *command, char *left_com);
 static void write_and_free(conn *c, char *buf, int bytes);
 static int ensure_iov_space(conn *c);
 static int add_iov(conn *c, const void *buf, int len);
@@ -3236,7 +3236,7 @@ static void process_slabs_automove_command(conn *c, token_t *tokens, const size_
     return;
 }
 
-static int process_command(conn *c, char *command, char *left_com) {
+static ulong process_command(conn *c, char *command, char *left_com) {
 
     token_t tokens[MAX_TOKENS];
     size_t ntokens;
@@ -3396,13 +3396,11 @@ static int process_command(conn *c, char *command, char *left_com) {
         process_verbosity_command(c, tokens, ntokens);
     } else {
     	if (ramcube_config_file) {
-            int rtn = ramcube_process_commands(c, (void *)tokens, ntokens, left_com);
+            ulong rtn = ramcube_process_commands(c, (void *)tokens, ntokens, left_com);
             if (rtn == 0)
                 conn_set_state(c, conn_new_cmd);
-            else if (rtn == 2) {
-
-                //conn_set_state(c, "");
-                return 1;
+            else if (rtn != -1) {
+                return rtn;
             }
             else
                 out_string(c, "ERROR");
@@ -3534,10 +3532,15 @@ static int try_read_command(conn *c) {
         *el = '\0';
 
         assert(cont <= (c->rcurr + c->rbytes));
-
-        if (process_command(c, c->rcurr, cont) == 1) {
+        ulong rtn = process_command(c, c->rcurr, cont);
+        if (rtn != 0) {
             c->rbytes = 0;
             c->rcurr = "";
+            //! we have store the data to memory, next we will send a reply to server
+            char str[100];
+            snprintf(str, 100, "BACKUP_REPLY %lu", rtn);
+            out_string(c, str);
+
         } else {
             c->rbytes -= (cont - c->rcurr);
             c->rcurr = cont;

@@ -39,7 +39,7 @@ typedef struct seglet {
 
 typedef struct segment {
     Head header;
-    void *p; //! store a store position
+    void *p; //! store a tail Seglet position
     Seglet *segleter;
     struct segment *next;
 } Segment;
@@ -53,15 +53,17 @@ typedef struct segmentmanager {
 int getCapacity(const Segment *seg);
 char *parseIpPort(char *cont);
 
-char *parseCommand(char *cont, char *Iport);
+char *parseCommand(const char *cont, char *Iport);
 char *getIp(char *cont);
 int getPort(char *cont);
 int getObjectLength(const Seglet *seg);
 Object *getNextObject(const Seglet *seg);
 
+
+
 Segment init_Segment(void);
 void setHead(Segment *seg, char *ip, int port);
-void setCapacity(Segment *seg);
+void setCapacity(Segment *seg, int bits);
 void setIpPort(Segment *seg);
 void appendToSegment(char *cont);//, struct in_addr addr, unsigned short port);//! append an object to segment
 void appendToManager(Segment *seg);//! append an segment to manager
@@ -71,5 +73,5 @@ void init_SegmentManager(void);
 Segment *createSegment(void);
 Segment *getSegment(SegmentManager *manager, char *ip, int port);
 Seglet *createSeglet(char *command);
-
+Segment *getLastSegment(SegmentManager *manager);
 

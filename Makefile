@@ -329,7 +329,7 @@ AUTOMAKE = automake-1.14
 AWK = gawk
 CC = gcc -std=gnu99
 CCDEPMODE = depmode=gcc3
-CFLAGS = -g -O2 -pthread -pthread -Wall -Werror -pedantic -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -fno-strict-aliasing
+CFLAGS = -g -O0 -pthread -pthread -Wall -Werror -pedantic -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -fno-strict-aliasing
 CPP = gcc -E
 CPPFLAGS = -I/usr/lib/x86_64-linux-gnu 
 CYGPATH_W = echo
