@@ -14,7 +14,6 @@ Object Obj;
 
 void init_object(void) {
     memset(&Obj, 0, sizeof(Obj));
-    Obj.next = NULL;
     return;
 }
 
