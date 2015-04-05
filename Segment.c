@@ -6,9 +6,13 @@
  ************************************************************************/
 
 #include<stdio.h>
-#include "Segment.h"
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/stat.h>       //for cmkdir
+#include <fcntl.h>          //for access
+#include <sys/types.h>
+#include <dirent.h>         // dir options
+#include "Segment.h"
 
 Segment* segHead;
 Seglet* letHead;
@@ -216,23 +220,64 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
 }
 
 //++++++++++++++++++++++++++++++++++ storage ++++++++++++++++++++++++++++++++++++++++++//
+/*
+ * make a directory to storage data file
+ */
+char *mkStorage(char *dirname) {
+    char *buf = (char *)malloc(128);
+    getcwd(buf, 128); //get current directory
+
+    if (access("backup", F_OK) == -1) {
+        fprintf(stderr, "directory not exist!\n");
+        strcat(buf, "/backup/");
+        mkdir(buf ,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        printf("%s has created!\n",buf);
+    } else {
+        strcat(buf, "/backup/");  //for change dir
+    }
+    if (chdir(buf) == 0) {
+        fprintf(stderr, "successful chdir to %s\n", buf);
+    }
+
+    // chech segment directory whether exist
+    if (access(dirname, F_OK) == -1) {
+        fprintf(stderr, "%s is not exist!\n", dirname);
+        strcat(buf, dirname);
+        mkdir(buf ,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    } else {
+        strcat(buf, dirname); //for return
+    }
+
+    return buf;
+}
 
 /*
  * move memory data to disk
- * filename format just like : 10.107.19.8.11211:1024:1294201532
- * IP.PORT : segletNum : time
+ * directory name : 10.107.19.8.11211
+ * filename format just like : 1024.1294201532.ram
+ * segletNum . time . suffix
  */
 
 int persist(Segment *seg) {
     FILE *fp;
     time_t t;
     time(&t); //! add time after filename
-    char filename[40] = "";
+    char filename[32] = "";
+    char dirname[64] = "";
     char temp[40] = "";
     int segletNum = getSegletNum(seg);
-    strcat(filename, seg->header.sin_addr);
-    sprintf(temp, ".%d:%d:%ld", seg->header.sin_port, segletNum, t);
-    strcat(filename, temp);
+    strcat(dirname, seg->header.sin_addr);
+    sprintf(temp, ".%d", seg->header.sin_port);  //int to char
+    strcat(dirname, temp);
+    char *currdir = mkStorage(dirname);  //make a storage directory
+
+    sprintf(filename, "%d.%ld.ram", segletNum, t);
+
+    //go to target directory
+    if (chdir(currdir) == 0) {
+        fprintf(stderr, "successful chdir to %s\n", currdir);
+    }
+    free(currdir);
     if((fp = fopen(filename, "wb"))==NULL)
     {
         printf("Error to open!\n");
@@ -247,3 +292,5 @@ int persist(Segment *seg) {
     fclose(fp);
     return 0;
 }
+
+//++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//

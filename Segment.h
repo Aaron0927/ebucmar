@@ -77,6 +77,11 @@ Seglet *createSeglet(char *command);
 Segment *getLastSegment(SegmentManager *manager);
 void setSegletNum(Segment *seg);
 int getSegletNum(Segment *seg);
+
 //++++++++++++++++++++++++++++++++++ storage ++++++++++++++++++++++++++++++++++++++++++//
 int persist(Segment *seg);
+char  *mkStorage(char *dirname);
+
+//++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//
+
 
