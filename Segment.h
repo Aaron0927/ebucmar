@@ -84,6 +84,6 @@ char  *mkStorage(char *dirname);
 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//
 
-Segment *readFile(char *fileName);
+Segment *readFile(char *dirName, char *fileName);
 int getSegmentLength(char *str);
-Segment *loadToMem(void);
+Segment *loadToMem(char *ipPort);

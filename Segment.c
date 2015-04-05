@@ -14,8 +14,7 @@
 #include <dirent.h>         // dir options
 #include "Segment.h"
 
-Segment* segHead;
-Seglet* letHead;
+Segment *recoverySubSeg; //receive a segment point when recovery
 SegmentManager *Manager;
 //! max segment is 8MB
 #define MAX_SEGMENT_CAPACITY 1024 * 1024 * 8
@@ -216,7 +215,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
 
             //test!!
             if(segIterator->header.capacity <= 8388584) {
-                Segment *tempSeg = loadToMem();
+                Segment *tempSeg = loadToMem("127.0.0.1.11114");
                 fprintf(stderr, "%d\n", tempSeg->header.capacity);
             }
         }
@@ -231,7 +230,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
  */
 char *mkStorage(char *dirname) {
     char *buf = (char *)malloc(128);
-    if (getcwd(buf, 128) != 0) { //get current directory
+    if (getcwd(buf, 128) == NULL) { //get current directory
         fprintf(stderr, "error to get cwd\n");
     }
     if (access("backup", F_OK) == -1) {
@@ -271,7 +270,7 @@ int persist(Segment *seg) {
     time(&t); //! add time after filename
 
     char *maindir = (char *)malloc(128);
-    if (getcwd(maindir, 128) != 0) { //get current directory
+    if (getcwd(maindir, 128) == NULL) { //get current directory
         fprintf(stderr, "error to ge cwd\n");
     }
 
@@ -312,15 +311,17 @@ int persist(Segment *seg) {
 }
 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//
-Segment *loadToMem(void) {
+Segment *loadToMem(char *ipPort) {
     Segment *currSeg, *head;
     head = (Segment *)malloc(sizeof(Segment));
-    currSeg = head;
+    int isFirst = 1; // using in while loop, to diff from others
     char *dirName = (char *)malloc(128);
-    if (getcwd(dirName, 128) != 0) { //get current directory
+    if (getcwd(dirName, 128) == NULL) { //get current directory
         fprintf(stderr, "error to get cwd\n");
     }
     strcat(dirName, "/backup/");
+    strcat(dirName, ipPort);
+    strcat(dirName,"/");
 
     DIR *dir;
     struct dirent *ent;
@@ -336,12 +337,15 @@ Segment *loadToMem(void) {
     {
         ptr = strrchr(ent->d_name,'.');
         if(ptr && (strcasecmp(ptr, ".ram") == 0)) {
-            if(head->next == NULL) { //the first time should to set head
-                currSeg = readFile(ent->d_name);   //read disk file to segment struct
-                free(head);
+            if(isFirst == 1) { //the first time should to set head
+
+                currSeg = readFile(dirName, ent->d_name);   //read disk file to segment struct
+                free(head);  //why we malloc then free, because compiler require
                 head = currSeg;
+                isFirst = 0;
             } else {
-                currSeg->next = readFile(ent->d_name);
+
+                currSeg->next = readFile(dirName, ent->d_name); //recoverySubSeg is a global variable
                 currSeg = currSeg->next;
                 currSeg->next = NULL;
             }
@@ -351,19 +355,47 @@ Segment *loadToMem(void) {
     return head;
 }
 
-Segment *readFile(char *fileName) {
+Segment *readFile(char *dirName, char *fileName) {
+    char name[64] = "";
+    int isFirst = 1; // using in while loop, to diff from others
+    strcat(name, dirName);
+    strcat(name, fileName);
     FILE *fp;
-    Segment *seg = createSegment();
-    if ((fp = fopen(fileName, "rb")) == NULL) {
-        fprintf(stderr, "error to open %s\n", fileName);
-        return seg;
+    Segment *head = createSegment();
+    Seglet *let;
+
+    if ((fp = fopen(name, "rb")) == NULL) {
+        fprintf(stderr, "error to open %s\n", name);
     }
     int len = getSegmentLength(fileName);
-    if (fread(seg, len, 1, fp) == 0) {
+    //before read we should reply the enough space to store read data
+    int i = len;
+    while (i != 0) {
+        if (isFirst == 1) {
+            head->next = NULL;
+            let = (Seglet *)malloc(sizeof(Seglet));
+            let->objector = (Object *)malloc(sizeof(Object));
+            let->next = NULL;
+            head->segleter = let;
+            isFirst = 0;
+        } else {
+            let->next = (Seglet *)malloc(sizeof(Seglet));
+            let->next->objector = (Object *)malloc(sizeof(Object));
+            let->next->next = NULL;
+            let = let->next;
+        }
+        --i;
+    }
+
+
+    // total length,a segment can store an object
+    if (fread(head, len * (sizeof(Seglet) + sizeof(Object)) + sizeof(Segment), 1, fp) == 0) {
         fprintf(stderr, "error to read\n");
     }
-    fclose(fp);
-    return seg;
+    if (fclose(fp) != 0) {
+        fprintf(stderr, "error to close\n");
+    }
+    return head;
 }
 
 int getSegmentLength(char *str) {
@@ -371,6 +403,7 @@ int getSegmentLength(char *str) {
     int length = 0;
     while(str[i] != '.') {
         length = length * 10 + (str[i] - '0');
+        ++i;
     }
     return length;
 }
