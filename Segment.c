@@ -213,6 +213,12 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
     while(segIterator != NULL) {
         if (segIterator->header.capacity <= 8388585) { //8388585 just for test
             persist(Iterator->segment);
+
+            //test!!
+            if(segIterator->header.capacity <= 8388584) {
+                Segment *tempSeg = loadToMem();
+                fprintf(stderr, "%d\n", tempSeg->header.capacity);
+            }
         }
         segIterator = segIterator->next;
     }
@@ -225,8 +231,9 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
  */
 char *mkStorage(char *dirname) {
     char *buf = (char *)malloc(128);
-    getcwd(buf, 128); //get current directory
-
+    if (getcwd(buf, 128) != 0) { //get current directory
+        fprintf(stderr, "error to get cwd\n");
+    }
     if (access("backup", F_OK) == -1) {
         fprintf(stderr, "directory not exist!\n");
         strcat(buf, "/backup/");
@@ -262,6 +269,12 @@ int persist(Segment *seg) {
     FILE *fp;
     time_t t;
     time(&t); //! add time after filename
+
+    char *maindir = (char *)malloc(128);
+    if (getcwd(maindir, 128) != 0) { //get current directory
+        fprintf(stderr, "error to ge cwd\n");
+    }
+
     char filename[32] = "";
     char dirname[64] = "";
     char temp[40] = "";
@@ -290,7 +303,101 @@ int persist(Segment *seg) {
     }
     //sync();
     fclose(fp);
+
+    //return main directory
+    if (chdir(maindir) != 0) {
+        fprintf(stderr, "error to change dir\n");
+    }
     return 0;
 }
 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//
+Segment *loadToMem(void) {
+    Segment *currSeg, *head;
+    head = (Segment *)malloc(sizeof(Segment));
+    currSeg = head;
+    char *dirName = (char *)malloc(128);
+    if (getcwd(dirName, 128) != 0) { //get current directory
+        fprintf(stderr, "error to get cwd\n");
+    }
+    strcat(dirName, "/backup/");
+
+    DIR *dir;
+    struct dirent *ent;
+    char *ptr;
+
+    dir = opendir(dirName);
+    if(dir == NULL)
+    {
+        fprintf(stderr,"Error : open directory %s \n",dirName);
+        return head;
+    }
+    while( (ent = readdir(dir)) != NULL)
+    {
+        ptr = strrchr(ent->d_name,'.');
+        if(ptr && (strcasecmp(ptr, ".ram") == 0)) {
+            if(head->next == NULL) { //the first time should to set head
+                currSeg = readFile(ent->d_name);   //read disk file to segment struct
+                free(head);
+                head = currSeg;
+            } else {
+                currSeg->next = readFile(ent->d_name);
+                currSeg = currSeg->next;
+                currSeg->next = NULL;
+            }
+        }
+    }
+    closedir(dir);
+    return head;
+}
+
+Segment *readFile(char *fileName) {
+    FILE *fp;
+    Segment *seg = createSegment();
+    if ((fp = fopen(fileName, "rb")) == NULL) {
+        fprintf(stderr, "error to open %s\n", fileName);
+        return seg;
+    }
+    int len = getSegmentLength(fileName);
+    if (fread(seg, len, 1, fp) == 0) {
+        fprintf(stderr, "error to read\n");
+    }
+    fclose(fp);
+    return seg;
+}
+
+int getSegmentLength(char *str) {
+    int i = 0;
+    int length = 0;
+    while(str[i] != '.') {
+        length = length * 10 + (str[i] - '0');
+    }
+    return length;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

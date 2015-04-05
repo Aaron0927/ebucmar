@@ -84,4 +84,6 @@ char  *mkStorage(char *dirname);
 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//
 
-
+Segment *readFile(char *fileName);
+int getSegmentLength(char *str);
+Segment *loadToMem(void);
