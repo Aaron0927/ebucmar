@@ -32,7 +32,7 @@
 typedef struct object {
     bool avaliable;
     time_t timestamp;
-    char *command;
+    char command[1024];
 } Object;
 
 void init_object(void);

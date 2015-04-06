@@ -22,7 +22,7 @@ int  setLength(int ntotal, Object *obj) {
 }
 
 void setCommandClient(char *com, Object *obj) {
-    obj->command = com;
+    strcpy(obj->command, com);
 }
 
 Object setCommandServer(char *key, char *data, int nbyte) {
@@ -35,7 +35,7 @@ Object setCommandServer(char *key, char *data, int nbyte) {
     strcat(buf, str);
     strcat(buf, "\r\n");
     strcat(buf, data);
-    Obj.command = buf;
+    strcpy(Obj.command, buf);
     //memcpy(Obj.command, buf, strlen(buf));
     //free(buf);
     return Obj;

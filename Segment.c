@@ -41,7 +41,7 @@ Segment *createSegment(void) {
 Seglet *createSeglet(char *command) {
     Seglet *let = (Seglet*)malloc(sizeof(Seglet));
     Object *obj = (Object*)malloc(sizeof(Object));
-    obj->command = command;
+    strcpy(obj->command, command);
     time(&obj->timestamp);
     obj->avaliable = true;
     let->length = strlen(command);
@@ -56,7 +56,7 @@ void setHead(Segment* seg, char *ip, int port) {
     seg->header.capacity = MAX_SEGMENT_CAPACITY;
     seg->header.segletnum = 0;
     seg->header.used = true;
-    seg->header.sin_addr = ip;
+    strcpy(seg->header.sin_addr, ip);
     seg->header.sin_port = port;
 }
 
@@ -356,40 +356,41 @@ Segment *loadToMem(char *ipPort) {
 }
 
 Segment *readFile(char *dirName, char *fileName) {
-    char name[64] = "";
+    char name[128] = "";
     int isFirst = 1; // using in while loop, to diff from others
     strcat(name, dirName);
     strcat(name, fileName);
     FILE *fp;
-    Segment *head = createSegment();
-    Seglet *let;
+
 
     if ((fp = fopen(name, "rb")) == NULL) {
         fprintf(stderr, "error to open %s\n", name);
     }
+    Segment *head = (Segment *)malloc(sizeof(Segment));
+    Seglet *let;
     int len = getSegmentLength(fileName);
     //before read we should reply the enough space to store read data
     int i = len;
     while (i != 0) {
         if (isFirst == 1) {
-            head->next = NULL;
+            //head->next = NULL;
             let = (Seglet *)malloc(sizeof(Seglet));
             let->objector = (Object *)malloc(sizeof(Object));
-            let->next = NULL;
+            //let->next = NULL;
             head->segleter = let;
             isFirst = 0;
         } else {
             let->next = (Seglet *)malloc(sizeof(Seglet));
             let->next->objector = (Object *)malloc(sizeof(Object));
-            let->next->next = NULL;
+            //let->next->next = NULL;
             let = let->next;
         }
         --i;
     }
 
-
+    int total = len * (sizeof(Seglet) + sizeof(Object)) + sizeof(Segment);
     // total length,a segment can store an object
-    if (fread(head, len * (sizeof(Seglet) + sizeof(Object)) + sizeof(Segment), 1, fp) == 0) {
+    if (fread(head, total, 1, fp) == 0) {
         fprintf(stderr, "error to read\n");
     }
     if (fclose(fp) != 0) {

@@ -28,7 +28,7 @@ typedef struct head {
     bool used;
     int segletnum; //! record the total seglets number of a segment
     int capacity;
-    char *sin_addr;
+    char sin_addr[20];
     int sin_port;
 } Head;
 
