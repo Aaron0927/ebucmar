@@ -13,7 +13,6 @@
 #include <sys/types.h>
 #include <dirent.h>         // dir options
 #include "Segment.h"
-
 Segment *recoverySubSeg; //receive a segment point when recovery
 SegmentManager *Manager;
 //! max segment is 8MB
@@ -215,8 +214,8 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
 
             //test!!
             if(segIterator->header.capacity <= 8388584) {
-                Segment *tempSeg = loadToMem("127.0.0.1.11114");
-                fprintf(stderr, "%d\n", tempSeg->header.capacity);
+                //Segment *tempSeg = loadToMem("127.0.0.1.11114");
+                //fprintf(stderr, "%d\n", tempSeg->header.capacity);
             }
         }
         segIterator = segIterator->next;
@@ -408,9 +407,6 @@ int getSegmentLength(char *str) {
     }
     return length;
 }
-
-
-
 
 
 

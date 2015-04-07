@@ -165,7 +165,7 @@ typedef struct {
 
 /*typedef struct {
 	evutil_socket_t sfd;
-	conn_t *c;
+    conn_t *c;
 } socket_conn_pair;
 socket_conn_pair mapWaitBackup[MAX_NEIGHBORS];
 
@@ -299,26 +299,26 @@ void init_ramcube_config(const settings_t *settings)
 
 		if (strcmp(s,"result_file") == 0){
             if (fscanf(f, "%s",config.resultFileName) == 1) {
-                printf("success to read result_file!\n\n");
+                //printf("success to read result_file!\n\n");
             }
             else {
-                printf("fail to read!\n");
+                //printf("fail to read!\n");
             }
 		}
 		if (strcmp(s,"nRecoveriesPerBackup") == 0){
             if (fscanf(f, "%u",&config.nRecoveriesPerBackup) == 1) {
-                printf("success to read nRecoveriesPerBackup!\n\n");
+                //printf("success to read nRecoveriesPerBackup!\n\n");
             }
             else {
-                printf("fail to read!\n");
+                //printf("fail to read!\n");
             }
         }
 		if (strcmp(s, "me") == 0){
             if (fscanf(f, "%s", name) == 1) {
-                printf("success to read me!\n\n");
+                //printf("success to read me!\n\n");
             }
             else {
-                printf("fail to read!\n");
+                //printf("fail to read!\n");
             }
             //rtn =
             set_sin_by_name(name, &config.me);
@@ -327,10 +327,10 @@ void init_ramcube_config(const settings_t *settings)
 		if (strcmp(s,"backups") == 0){
 			char tmp[100];
             if (fscanf(f, "%s", tmp) == 1) {
-                printf("success to read backups!\n\n");
+                //printf("success to read backups!\n\n");
             }
             else {
-                printf("fail to read!\n");
+                //printf("fail to read!\n");
             }
 			SOCKADDR_IN *pSin = alloc_sin_from_neighbors();
 			assert(pSin != NULL);
@@ -693,6 +693,7 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 
 ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *left_com)
 {
+    //recoveryBackupConnect("127.0.0.1", 11113, c->thread->base);
 	assert(ramcube_config_file);
 	
 	ramcube_token_t *tokens = (ramcube_token_t *)t;
@@ -907,6 +908,11 @@ ulong ramcube_post_set_data(conn_t *c)
 
 		return 1;
 	}
+    else if (cp->m_type == PROXY_TYPE_RECOVERY_CLIENT) { /* add by Aaron */
+        send_to_recovery();
+        return 0;
+
+    }
 
 	return -1;
 }
@@ -1025,4 +1031,62 @@ static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, c
     ntokens++;
 
     return ntokens;
+}
+
+
+//++++++++++++++++++++++++++++++++++ recoveryMasterConnect ++++++++++++++++++++++++++++++++++++++//
+
+//++++++++++++++++++++++++++++++++++ recoveryBackupConnect ++++++++++++++++++++++++++++++++++++++//
+
+/*
+ * recovery backup(revovery client) request to connect recovery master(recovery server)
+ */
+void recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
+    /* check recoverymaster whether connect with me already */
+    int i;
+    for (i = 0; i < MAX_NEIGHBORS; i++) {
+        if (neighbors[i].in_use == true ) {
+            if (strcmp(inet_ntoa(neighbors[i].sin.sin_addr), ip) == 0
+                && ntohs(neighbors[i].sin.sin_port) == port) {
+                return; /* already connected so return */
+            }
+        } else {
+            break;
+        }
+    }
+
+    /* to connect recoverymaster */
+    SOCKADDR_IN Sin = {0};
+    inet_aton(ip, &Sin.sin_addr);
+    Sin.sin_port = port;
+    connect_and_return_ConnProxy(pBase, &Sin, PROXY_TYPE_RECOVERY_CLIENT);
+
+
+}
+
+void send_to_recovery(void)
+{
+    Segment *seg = loadToMem("127.0.0.1.11114"); /* load data from disk to memory */
+    char str[1024*1024*8];
+    segmentToString(seg, str);
+
+    /*
+    evbuffer_add_printf(cpBackupOut->m_outputBuffer, "BACKUP_REQUEST %lu\r\n",
+            (ulong)data_conn_ptr);
+
+    evbuffer_add(cpBackupOut->m_outputBuffer, obj.command, strlen(obj.command));
+    evbuffer_add_printf(cpBackupOut->m_outputBuffer, "%s:%d\r\n", config.myAddr, config.myPort);
+    */
+
+}
+
+/*
+ * convert segment formatting to string
+ */
+void segmentToString(Segment *seg, char *str) {
+    seglet *let = seg->segleter;
+    while (let != NULL) {
+        strcpy(str, let->objector->command);
+        let = let->next;
+    }
 }

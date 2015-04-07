@@ -7,7 +7,7 @@
 
 #ifndef _SEGMENT_H
 #define _SEGMENT_H
-#endif
+
 #include "Object.h"
 #include <arpa/inet.h>
 #include <stdbool.h>
@@ -87,3 +87,7 @@ char  *mkStorage(char *dirname);
 Segment *readFile(char *dirName, char *fileName);
 int getSegmentLength(char *str);
 Segment *loadToMem(char *ipPort);
+void SentToRecovery();
+
+
+#endif

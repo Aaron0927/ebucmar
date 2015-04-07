@@ -8,7 +8,7 @@
 //what
 #ifndef _OBJECT_H
 #define _OBJECT_H
-#endif
+
 #include <stdio.h>
 #include <time.h>
 #include <assert.h>
@@ -44,3 +44,4 @@ void setTimestamp(time_t timestamp);
 Object setCommandServer(char *key, char *data, int nbyte);
 int  setLength(int ntotal, Object *obj);
 void setCommandClient(char *com, Object *obj);
+#endif
