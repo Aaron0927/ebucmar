@@ -206,6 +206,10 @@ int process_command_BACKUP_REPLY(ramcube_token_t *, ConnProxy *);
 void send_string_via_out_cp(ConnProxy *, const char *);
 static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, const size_t max_tokens);
 
+//++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++//
+void recoveryBackupConnect(char *Ip, int port, struct event_base *pBase);
+void send_to_recovery(ConnProxy *cp);
+void segmentToString(Segment *seg, char *str);
 void ramcube_adjust_memcached_settings(settings_t *s)
 {	
 	assert(ramcube_config_file);
@@ -602,7 +606,9 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 	printf("sending str: %s\n", tmpStr);
 	bufferevent_write(bev, tmpStr, strlen(tmpStr));
 
-
+    //if (type == PROXY_TYPE_RECOVERY_CLIENT) { // direct to write data to recovery
+        //send_to_recovery(cp);
+    //}
 //	pvpProxies->push_back(cp);
 	printf("connect_and_return_ConnProxy(): (%s:%d) added to %s\n", 
 			inet_ntoa(pSin->sin_addr), ntohs(pSin->sin_port), 
@@ -717,6 +723,9 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         //! add by Aaron on 1th April 2015
         appendToSegment(left_com); //receive data and store to memory
 
+        //!!!!!!!!!!!!!!!! just for test
+        //recoveryBackupConnect("127.0.0.1", 11114, c->thread->base);
+
         return (ulong)cp->data_conn_ptr;  //! useful
 	} 
 	/*"BACKUP_REPLY" is intercepted by read_cb, so the following is useless*/
@@ -725,6 +734,12 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 		process_command_BACKUP_REPLY(tokens, cp);
 		return 0;
 	}	
+    //++++++++++++recovery++++++++++++++//
+    else if (ntokens == 3 && strcmp(comm, "RECOVERY_REQUEST") == 0
+             && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
+        fprintf(stderr,"+++++++++++++++++++++++++++++receive recovery\n");
+
+    }
 
 	return -1;
 }
@@ -908,11 +923,11 @@ ulong ramcube_post_set_data(conn_t *c)
 
 		return 1;
 	}
-    else if (cp->m_type == PROXY_TYPE_RECOVERY_CLIENT) { /* add by Aaron */
-        send_to_recovery();
-        return 0;
+    //else if (cp->m_type == PROXY_TYPE_RECOVERY_CLIENT) { /* add by Aaron */
+        //send_to_recovery();
+        //return 0;
 
-    }
+    //}
 
 	return -1;
 }
@@ -1043,40 +1058,39 @@ static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, c
  */
 void recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
     /* check recoverymaster whether connect with me already */
-    int i;
+    /*int i;
     for (i = 0; i < MAX_NEIGHBORS; i++) {
         if (neighbors[i].in_use == true ) {
             if (strcmp(inet_ntoa(neighbors[i].sin.sin_addr), ip) == 0
                 && ntohs(neighbors[i].sin.sin_port) == port) {
-                return; /* already connected so return */
+                return; // already connected so return
             }
         } else {
             break;
         }
-    }
+    }*///disconsider this case, if backup is sending or receiving the msg, it will cause error
+
 
     /* to connect recoverymaster */
     SOCKADDR_IN Sin = {0};
     inet_aton(ip, &Sin.sin_addr);
     Sin.sin_port = port;
+    Sin.sin_family = AF_INET;
     connect_and_return_ConnProxy(pBase, &Sin, PROXY_TYPE_RECOVERY_CLIENT);
 
 
 }
 
-void send_to_recovery(void)
+void send_to_recovery(ConnProxy *cp)
 {
     Segment *seg = loadToMem("127.0.0.1.11114"); /* load data from disk to memory */
-    char str[1024*1024*8];
+    char str[1024*10];
     segmentToString(seg, str);
+    evbuffer_add_printf(cp->m_outputBuffer, "RECOVERY_REQUEST %lu\r\n",
+            (ulong)cp);
 
-    /*
-    evbuffer_add_printf(cpBackupOut->m_outputBuffer, "BACKUP_REQUEST %lu\r\n",
-            (ulong)data_conn_ptr);
-
-    evbuffer_add(cpBackupOut->m_outputBuffer, obj.command, strlen(obj.command));
-    evbuffer_add_printf(cpBackupOut->m_outputBuffer, "%s:%d\r\n", config.myAddr, config.myPort);
-    */
+    evbuffer_add(cp->m_outputBuffer, str, strlen(str));
+    //evbuffer_add_printf(cp->m_outputBuffer, "%s:%d\r\n", config.myAddr, config.myPort);
 
 }
 
@@ -1084,7 +1098,7 @@ void send_to_recovery(void)
  * convert segment formatting to string
  */
 void segmentToString(Segment *seg, char *str) {
-    seglet *let = seg->segleter;
+    Seglet *let = seg->segleter;
     while (let != NULL) {
         strcpy(str, let->objector->command);
         let = let->next;

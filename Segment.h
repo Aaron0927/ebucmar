@@ -89,5 +89,6 @@ int getSegmentLength(char *str);
 Segment *loadToMem(char *ipPort);
 void SentToRecovery();
 
+void freeSegment(Segment *seg);
 
 #endif

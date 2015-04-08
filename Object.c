@@ -35,6 +35,8 @@ Object setCommandServer(char *key, char *data, int nbyte) {
     strcat(buf, str);
     strcat(buf, "\r\n");
     strcat(buf, data);
+    //clear Obj.command
+    memset(Obj.command, 0, 1024);
     strcpy(Obj.command, buf);
     //memcpy(Obj.command, buf, strlen(buf));
     //free(buf);

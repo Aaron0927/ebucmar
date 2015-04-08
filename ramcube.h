@@ -10,11 +10,6 @@ ulong ramcube_post_set_data(conn *);
 
 
 extern char *ramcube_config_file; 
-//++++++++++++++++++++++++++++++++++ recoveryMasterConnect ++++++++++++++++++++++++++++++++++++++//
 
-//++++++++++++++++++++++++++++++++++ recoveryBackupConnect ++++++++++++++++++++++++++++++++++++++//
-void recoveryBackupConnect(char *Ip, int port, struct event_base *pBase);
-void send_to_recovery(void);
-void segmentToString(Segment *seg, char *str);
 
 #endif // #ifndef RAMCUBE_H

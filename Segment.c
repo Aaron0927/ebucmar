@@ -209,14 +209,16 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
     //这个时候我们启动persist
     Segment *segIterator = Manager->segment;
     while(segIterator != NULL) {
+        //Segment *temp = segIterator;
         if (segIterator->header.capacity <= 8388585) { //8388585 just for test
-            persist(Iterator->segment);
+            persist(segIterator);
 
             //test!!
             if(segIterator->header.capacity <= 8388584) {
-                //Segment *tempSeg = loadToMem("127.0.0.1.11114");
-                //fprintf(stderr, "%d\n", tempSeg->header.capacity);
+                Segment *tempSeg = loadToMem("127.0.0.1.11114");
+                fprintf(stderr, "%d\n", tempSeg->header.capacity);
             }
+            //freeSegment(temp);
         }
         segIterator = segIterator->next;
     }
@@ -306,6 +308,8 @@ int persist(Segment *seg) {
     if (chdir(maindir) != 0) {
         fprintf(stderr, "error to change dir\n");
     }
+    free(maindir);
+
     return 0;
 }
 
@@ -409,7 +413,18 @@ int getSegmentLength(char *str) {
 }
 
 
-
+void freeSegment(Segment *seg) {
+    Seglet *itorator = seg->segleter;
+    Seglet *temp = itorator;
+    //Object *obj = itorator->objector;
+    while(itorator != NULL) {
+        temp = temp->next;
+        free(itorator->objector);
+        free(itorator);
+        itorator = temp;
+    }
+    free(seg);
+}
 
 
 
