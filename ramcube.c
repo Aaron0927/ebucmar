@@ -207,7 +207,6 @@ void send_string_via_out_cp(ConnProxy *, const char *);
 static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, const size_t max_tokens);
 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++//
-void recoveryBackupConnect(char *Ip, int port, struct event_base *pBase);
 void send_to_recovery(ConnProxy *cp);
 void segmentToString(Segment *seg, char *str);
 void ramcube_adjust_memcached_settings(settings_t *s)
@@ -279,6 +278,7 @@ void ramcube_init(struct event_base *main_base, const settings_t *s)
 	init_ramcube_config(s);
 	init_smaller_proxies(main_base, PROXY_TYPE_PING_CLIENT);
 	init_smaller_proxies(main_base, PROXY_TYPE_BACKUP_CLIENT);
+    //recoveryBackupConnect("127.0.0.1", 11121, main_base);
 
 }
 
@@ -579,6 +579,9 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 	
 	//connect to peer
 	struct bufferevent *bev = bufferevent_socket_new(pBase, -1, BEV_OPT_CLOSE_ON_FREE);
+    if (bev == NULL) {
+        fprintf(stderr,"error to new socket bufferevent\n");
+    }
 	//bufferevent_setwatermark(bev, EV_READ, 0, DATA_BUFFER_SIZE);
     bufferevent_setcb(bev, read_cb, NULL, event_cb, (void *)cp);
 
@@ -705,7 +708,9 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 
 ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *left_com)
 {
-    //recoveryBackupConnect("127.0.0.1", 11113, c->thread->base);
+    /* add recovery modle */
+    recoveryBackupConnect("127.0.0.1", 11121, c->thread->base);
+
 	assert(ramcube_config_file);
 	
 	ramcube_token_t *tokens = (ramcube_token_t *)t;
@@ -743,7 +748,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
     //++++++++++++recovery++++++++++++++//
     else if (ntokens == 3 && strcmp(comm, "RECOVERY_REQUEST") == 0
              && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
-        fprintf(stderr,"+++++++++++++++++++++++++++++receive recovery\n");
+        fprintf(stderr,"+++++++++++++++++++++++++++++receive recovery backup data\n");
 
     }
 
@@ -788,13 +793,13 @@ int process_command_TYPE(ramcube_token_t *tokens, ConnProxy *cp)
 		
 
 		if (set_sin_by_name(peer_name, &cp->m_peerSin) == -1){	
-			printf("ERROR in set_sin_by_name(): failed to init %s.\n", peer_name);
+            fprintf(stderr, "ERROR in set_sin_by_name(): failed to init %s.\n", peer_name);
 			return -1;
 		}
 
-		printf("process_command_TYPE(): %s (%s:%d) connected\n", subcomm, 
+        fprintf(stderr, "process_command_TYPE(): %s (%s:%d) connected\n", subcomm,
 				inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
-		printf("process_command_TYPE(): (%s:%d) added to vpRecoveryIn\n", 
+        fprintf(stderr, "process_command_TYPE(): (%s:%d) added to vpRecoveryIn\n",
 				inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
 		push_back_proxy(vpRecoveryIn, cp);
 
@@ -1087,10 +1092,10 @@ void recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
     /* to connect recoverymaster */
     SOCKADDR_IN Sin = {0};
     inet_aton(ip, &Sin.sin_addr);
-    Sin.sin_port = port;
+    Sin.sin_port = htons(port);
     Sin.sin_family = AF_INET;
+    bzero(&(Sin.sin_zero), 8);
     connect_and_return_ConnProxy(pBase, &Sin, PROXY_TYPE_RECOVERY_CLIENT);
-
 
 }
 

@@ -48,7 +48,7 @@
 #include <stddef.h>
 #include "Segment.h"
 #include "ramcube.h"
-
+#include <pthread.h>
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
 #ifndef IOV_MAX
 #if defined(__FreeBSD__) || defined(__APPLE__)
@@ -4077,6 +4077,7 @@ void drive_machine(conn *c) {
                 conn_cleanup(c);
             else
                 conn_close(c);
+
             stop = true;
             break;
 

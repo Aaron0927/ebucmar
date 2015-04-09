@@ -214,10 +214,10 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
             persist(segIterator);
 
             //test!!
-            if(segIterator->header.capacity <= 8388584) {
-                Segment *tempSeg = loadToMem("127.0.0.1.11114");
-                fprintf(stderr, "%d\n", tempSeg->header.capacity);
-            }
+            //if(segIterator->header.capacity <= 8388584) {
+            //    Segment *tempSeg = loadToMem("127.0.0.1.11114");
+            //    fprintf(stderr, "%d\n", tempSeg->header.capacity);
+            //}
             //freeSegment(temp);
         }
         segIterator = segIterator->next;
