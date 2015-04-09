@@ -27,19 +27,19 @@ Segment init_Segment(void) {
 
 void init_SegmentManager(void) {
     //memset(&Manager, 0, sizeof(Manager));
-    Manager = (SegmentManager *)malloc(sizeof(SegmentManager));
+    Manager = (SegmentManager *)calloc(1, sizeof(SegmentManager));
     Manager->used = false;
     return;
 }
 
 Segment *createSegment(void) {
-    Segment *seg = (Segment*)malloc(sizeof(Segment));
+    Segment *seg = (Segment*)calloc(1, sizeof(Segment));
     return seg;
 }
 
 Seglet *createSeglet(char *command) {
-    Seglet *let = (Seglet*)malloc(sizeof(Seglet));
-    Object *obj = (Object*)malloc(sizeof(Object));
+    Seglet *let = (Seglet*)calloc(1, sizeof(Seglet));
+    Object *obj = (Object*)calloc(1, sizeof(Object));
     strcpy(obj->command, command);
     time(&obj->timestamp);
     obj->avaliable = true;
@@ -209,7 +209,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
     //这个时候我们启动persist
     Segment *segIterator = Manager->segment;
     while(segIterator != NULL) {
-        //Segment *temp = segIterator;
+        //Segment *temp = segIterator->next;
         if (segIterator->header.capacity <= 8388585) { //8388585 just for test
             persist(segIterator);
 
@@ -296,8 +296,20 @@ int persist(Segment *seg) {
         printf("Error to open!\n");
         return -1;
     }
-    int totalSize = sizeof(Segment) + (sizeof(Seglet) + sizeof(Object)) * segletNum;
-    fwrite(seg, totalSize,1,fp); /* 成块写入文件*/
+
+    /* write respectively */
+    int segSize = sizeof(Segment);
+    int letSize = sizeof(Seglet);
+    int objSize = sizeof(Object);
+    fwrite(seg, segSize, 1, fp);
+    Seglet *let = seg->segleter;
+    while (let != NULL) {
+        fwrite(let,letSize, 1, fp);
+        fwrite(let->objector, objSize, 1, fp);
+        let = let->next;
+    }
+    /* +++++++ write_end ++++++ */
+
     if (fflush(fp) == 0) {
         printf("successful!\n");
     }
@@ -364,41 +376,42 @@ Segment *readFile(char *dirName, char *fileName) {
     strcat(name, dirName);
     strcat(name, fileName);
     FILE *fp;
+    int segSize = sizeof(Segment);
+    int letSize = sizeof(Seglet);
+    int objSize = sizeof(Object);
 
+    if ((fp = fopen(name, "rb")) == NULL) {
+        fprintf(stderr, "error to open %s\n", name);
+    }
 
+    Segment *head = (Segment *)calloc(1, sizeof(Segment));
+    if (fread(head, segSize, 1, fp) == 0) {
+        fprintf(stderr, "error to read\n");
+    }
 
-    Segment *head = (Segment *)malloc(sizeof(Segment));
     Seglet *let;
     int len = getSegmentLength(fileName);
     //before read we should reply the enough space to store read data
     int i = len;
     while (i != 0) {
         if (isFirst == 1) {
-            //head->next = NULL;
-            let = (Seglet *)malloc(sizeof(Seglet));
-            let->objector = (Object *)malloc(sizeof(Object));
-            let->next = NULL;
+            let = (Seglet *)calloc(1, sizeof(Seglet));
+            fread(let, letSize, 1, fp);
+            let->objector = (Object *)calloc(1, sizeof(Object));
+            fread(let->objector, objSize, 1, fp);
             head->segleter = let;
             isFirst = 0;
         } else {
-            let->next = (Seglet *)malloc(sizeof(Seglet));
-            let->next->objector = (Object *)malloc(sizeof(Object));
-            let->next->next = NULL;
+            let->next = (Seglet *)calloc(1, sizeof(Seglet));
+            fread(let->next, letSize, 1, fp);
+            let->next->objector = (Object *)calloc(1, sizeof(Object));
+            fread(let->next->objector, objSize, 1, fp);
             let = let->next;
         }
         --i;
     }
 
-    int total = len * (sizeof(Seglet) + sizeof(Object)) + sizeof(Segment);
-    // total length,a segment can store an object
 
-    if ((fp = fopen(name, "rb")) == NULL) {
-        fprintf(stderr, "error to open %s\n", name);
-    }
-
-    if (fread(head, total, 1, fp) == 0) {
-        fprintf(stderr, "error to read\n");
-    }
     if (fclose(fp) != 0) {
         fprintf(stderr, "error to close\n");
     }
