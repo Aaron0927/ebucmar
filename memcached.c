@@ -3635,6 +3635,7 @@ static enum try_read_result try_read_network(conn *c) {
         }
 
         int avail = c->rsize - c->rbytes;
+        memset(c->rbuf + c->rbytes, 0, avail);
         res = read(c->sfd, c->rbuf + c->rbytes, avail);
         if (res > 0) {
             pthread_mutex_lock(&c->thread->stats.mutex);

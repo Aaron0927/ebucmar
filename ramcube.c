@@ -663,6 +663,12 @@ void read_cb(struct bufferevent *bev, void *ctx)
 
 void write_cb(struct bufferevent *bev, void *ctx)
 {
+    ConnProxy *cp = (ConnProxy *)ctx;
+    assert(cp);
+
+    size_t nBuf = evbuffer_get_length(cp->m_outputBuffer);
+    fprintf(stderr,"++++++++++%lu\n", nBuf);
+
 	return;
 //	ConnProxy *p = (ConnProxy *)ctx;
 
@@ -953,14 +959,21 @@ ConnProxy *get_backup_proxy_by_key(const char *key, size_t nkey)
 void send_unit_to_backup(ConnProxy *cpBackupOut, item *unit, void *data_conn_ptr) 
 {
     Object obj = setCommandServer(ITEM_key(unit), ITEM_data(unit), unit->nbytes - 2);
+    size_t nBuf = evbuffer_get_length(cpBackupOut->m_outputBuffer);
+    fprintf(stderr,"++++++++++%lu\n", nBuf);
 	//assert(comm);
 	//send_string(comm);
 	//evbuffer_add_printf(cp->m_outputBuffer, "%s %d\r\n", comm, clifd);
+    //evbuffer_drain(cpBackupOut->m_outputBuffer, 2048);
     evbuffer_add_printf(cpBackupOut->m_outputBuffer, "BACKUP_REQUEST %lu\r\n",
             (ulong)data_conn_ptr);
 
     evbuffer_add(cpBackupOut->m_outputBuffer, obj.command, strlen(obj.command));
     evbuffer_add_printf(cpBackupOut->m_outputBuffer, "%s:%d\r\n", config.myAddr, config.myPort);
+
+    nBuf = evbuffer_get_length(cpBackupOut->m_outputBuffer);
+    fprintf(stderr,"++++++++++%lu\n", nBuf);
+
     //evbuffer_add_printf(cpBackupOut->m_outputBuffer, "set %s 0 0 %d\r\n", 
 	//		ITEM_key(unit), unit->nbytes - 2);
 	//evbuffer_add_reference(cpBackupOut->m_outputBuffer, ITEM_data(unit), unit->nbytes, 
