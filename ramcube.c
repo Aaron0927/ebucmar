@@ -381,6 +381,8 @@ int init_smaller_proxies(struct event_base *pBase, enum proxy_type type)
 	char *typeStr = NULL;
 
 	if (type == PROXY_TYPE_BACKUP_CLIENT) {
+        /* 心跳 */
+        //HeartBeat("129", 123, pBase);
 		pvpSin = vpBackupSins;
 		typeStr = strBackup;
 	} 
@@ -562,6 +564,10 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 		typeStr = strBackup;
 	} 
 	else if (type == PROXY_TYPE_PING_CLIENT){
+
+        /* 心跳机制 */
+        void clientHearBeat(char *Ip, int port, struct event_base *pBase);
+
 		pvpProxies = vpPingOut;
 		typeStr = strPing;
 	} 
@@ -1122,3 +1128,38 @@ void segmentToString(Segment *seg, char *str) {
         let = let->next;
     }
 }
+
+/*+++++++++++++++++++++++++++++++++++++ 心跳机制 ++++++++++++++++++++++++++++++++++*/
+/* HB_cb heartbeat 回调函数 */
+void HB_cb(int fd, short event, void *arg) {
+    printf("heart beat!!!!!!!!!!!!!!!!!!!\n");
+
+}
+
+
+void HeartBeat(char *Ip, int port, struct event_base *pBase) {
+    struct timeval tv; //设置定时器
+    struct event ev; //事件
+    tv.tv_sec = 2; //时间间隔
+    tv.tv_usec = 0; //微秒数
+    evtimer_set(&ev, HB_cb, NULL);//初始化事件，并设置回调函数
+    event_add(&ev, &tv); //注册事件
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

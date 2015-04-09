@@ -12,5 +12,7 @@ ulong ramcube_post_set_data(conn *);
 extern char *ramcube_config_file; 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++//
 void recoveryBackupConnect(char *Ip, int port, struct event_base *pBase);
-
+//客户端发送心跳包
+void HeartBeat(char *Ip, int port, struct event_base *pBase);
+void HB_cb(int fd, short ev, void *arg);
 #endif // #ifndef RAMCUBE_H
