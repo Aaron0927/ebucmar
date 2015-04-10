@@ -48,7 +48,7 @@ enum proxy_type {
 	PROXY_TYPE_BACKUP_CLIENT,	// backup tx
 	PROXY_TYPE_BACKUP_SERVER,	// backup rx
 	PROXY_TYPE_RECOVERY_CLIENT,
-	PROXY_TYPE_RECOVERY_SERVER,
+    PROXY_TYPE_RECOVERY_SERVER,
 	PROXY_TYPE_UNKNOWN,
 	PROXY_TYPE_NUMBER
 };
@@ -156,6 +156,12 @@ typedef struct ConnProxy_s {
 //	DWORD m_dwRecoverBeginTime;
 
 	conn_t *connection;
+
+    //for heartbeart
+    struct event evt;
+
+    char sendInfo[64];
+    int outTimes;
 }ConnProxy;
 
 typedef struct {
@@ -209,6 +215,11 @@ static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, c
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++//
 void send_to_recovery(ConnProxy *cp);
 void segmentToString(Segment *seg, char *str);
+//客户端发送心跳包
+void HeartBeat(char *Ip, int port, ConnProxy *cp, struct event_base *pBase);
+static void HB_cb(int fd, short ev, void *arg);
+void sendHeartBeat(ConnProxy * cp);
+
 void ramcube_adjust_memcached_settings(settings_t *s)
 {	
 	assert(ramcube_config_file);
@@ -277,7 +288,7 @@ void ramcube_init(struct event_base *main_base, const settings_t *s)
 
 	init_ramcube_config(s);
 	init_smaller_proxies(main_base, PROXY_TYPE_PING_CLIENT);
-	init_smaller_proxies(main_base, PROXY_TYPE_BACKUP_CLIENT);
+    init_smaller_proxies(main_base, PROXY_TYPE_BACKUP_CLIENT);
     //recoveryBackupConnect("127.0.0.1", 11121, main_base);
 
 }
@@ -344,7 +355,7 @@ void init_ramcube_config(const settings_t *settings)
             //assert(rtn == 0);
 			push_back_sin(vpBackupSins, pSin);
 		}
-		if (strcmp(s,"pings") == 0){
+        if (strcmp(s,"pings") == 0){
 			char tmp[100];
             if (fscanf(f, "%s", tmp) == 1) {
                 printf("success to read ping!\n\n");
@@ -359,7 +370,7 @@ void init_ramcube_config(const settings_t *settings)
             set_sin_by_name(tmp, pSin);
             //assert(rtn == 0);
 			push_back_sin(vpPingSins, pSin);
-		}
+        }
 
 	} //end of while (fscanf(f, "%s",s)!=EOF)
 
@@ -377,7 +388,7 @@ int init_smaller_proxies(struct event_base *pBase, enum proxy_type type)
 	//vector<SOCKADDR_IN *> *pvpSin = NULL;
 	SOCKADDR_IN **pvpSin = NULL;
 	
-	char *strBackup = "BACKUP", *strPing = "PING";
+    char *strBackup = "BACKUP", *strPing = "PING";
 	char *typeStr = NULL;
 
 	if (type == PROXY_TYPE_BACKUP_CLIENT) {
@@ -389,7 +400,7 @@ int init_smaller_proxies(struct event_base *pBase, enum proxy_type type)
 	else if (type == PROXY_TYPE_PING_CLIENT){
 		pvpSin = vpPingSins;
 		typeStr = strPing;
-	} 
+    }
 	else{
 		printf ("ERROR: wrong proxy type (%d)\n", type);
 		return -1;
@@ -555,7 +566,7 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 {
 	ConnProxy **pvpProxies = NULL;
 	ConnProxy *cp;
-	char *strBackup = "BACKUP", *strPing = "PING", *strRecovery = "RECOVERY";
+    char *strBackup = "BACKUP", *strPing = "PING", *strRecovery = "RECOVERY";
 	char *typeStr = NULL;
 	int rtn;
 
@@ -564,17 +575,13 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 		typeStr = strBackup;
 	} 
 	else if (type == PROXY_TYPE_PING_CLIENT){
-
-        /* 心跳机制 */
-        void clientHearBeat(char *Ip, int port, struct event_base *pBase);
-
 		pvpProxies = vpPingOut;
 		typeStr = strPing;
 	} 
 	else if (type == PROXY_TYPE_RECOVERY_CLIENT){
 		pvpProxies = vpRecoveryOut;
 		typeStr = strRecovery;
-	}
+    }
 	else{
 		printf ("ERROR: wrong proxy type (%d)\n", type);
 		return NULL;
@@ -625,6 +632,11 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 				"vpBackupOut" : 
 				(type == PROXY_TYPE_PING_CLIENT ? "vpPingOut" : "vpRecoveryOut")));
 
+
+    if (type == PROXY_TYPE_PING_CLIENT){
+           /* 心跳机制 */
+           HeartBeat("127.0.0.1", 11121, cp, pBase);
+    }
 	return cp;
 }
 
@@ -701,6 +713,7 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 	cp->m_inputBuffer = bufferevent_get_input(bufev); 
 	cp->m_outputBuffer = bufferevent_get_output(bufev);
 	cp->m_type = t;
+    cp->outTimes = 0; //heartbeat times
 
 	//for debugging on one node 
 	//pSin == NULL means this init is called by accept(). peerSin will be set 
@@ -715,7 +728,7 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *left_com)
 {
     /* add recovery modle */
-    recoveryBackupConnect("127.0.0.1", 11121, c->thread->base);
+    //recoveryBackupConnect("127.0.0.1", 11121, c->thread->base);
 
 	assert(ramcube_config_file);
 	
@@ -756,6 +769,9 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
              && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
         fprintf(stderr,"+++++++++++++++++++++++++++++receive recovery backup data\n");
 
+    }
+    else if (ntokens == 2 && strcmp(comm, "HEARTBEAT") == 0) {
+        printf("->->->->receive heartbeat!\n");
     }
 
 	return -1;
@@ -1131,22 +1147,44 @@ void segmentToString(Segment *seg, char *str) {
 
 /*+++++++++++++++++++++++++++++++++++++ 心跳机制 ++++++++++++++++++++++++++++++++++*/
 /* HB_cb heartbeat 回调函数 */
-void HB_cb(int fd, short event, void *arg) {
-    printf("heart beat!!!!!!!!!!!!!!!!!!!\n");
-
-}
-
-
-void HeartBeat(char *Ip, int port, struct event_base *pBase) {
-    struct timeval tv; //设置定时器
-    struct event ev; //事件
+static void HB_cb(int fd, short event, void *arg) {
+    ConnProxy *cp = (ConnProxy *)arg;
+    sendHeartBeat(cp);
+    struct timeval tv;
     tv.tv_sec = 2; //时间间隔
     tv.tv_usec = 0; //微秒数
-    evtimer_set(&ev, HB_cb, NULL);//初始化事件，并设置回调函数
-    event_add(&ev, &tv); //注册事件
+    // 事件执行后,默认就被删除,需要重新add,使之重复执行
+    event_add(&(cp->evt), &tv);
 }
 
 
+void HeartBeat(char *Ip, int port, ConnProxy *cp, struct event_base *pBase) {
+    struct timeval tv; //设置定时器
+    //struct event ev; //事件
+    tv.tv_sec = 2; //时间间隔
+    tv.tv_usec = 0; //微秒数
+    evtimer_set(&(cp->evt), HB_cb, cp);//初始化事件，并设置回调函数
+    event_base_set(pBase, &(cp->evt));
+    event_add(&(cp->evt), &tv); //注册事件
+}
+
+void sendHeartBeat(ConnProxy * cp) {
+    char peerIp[16] = "";
+    int peerPort;
+    strcpy(peerIp, inet_ntoa(cp->m_peerSin.sin_addr));
+    peerPort = ntohs(cp->m_peerSin.sin_port);
+    if (cp->outTimes < 5) {
+        strcpy(cp->sendInfo, "heartbeat");
+        evbuffer_add(cp->m_outputBuffer, cp->sendInfo, strlen(cp->sendInfo));
+        ++(cp->outTimes);
+        printf("->->->->-> : send \"%s\" to %s : %d\n", cp->sendInfo, peerIp, peerPort);
+    } else {
+
+    }
+
+
+
+}
 
 
 
