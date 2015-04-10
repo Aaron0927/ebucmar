@@ -1,15 +1,0 @@
-SET: 0.00SET: 31705.18SET: 31475.05SET: 31331.56SET: 31339.66SET: 31259.79SET: 31316.46SET: 31260.99SET: 31280.86SET: 31251.00SET: 31242.70SET: 31073.06SET: 31082.97====== SET ======
-  100002 requests completed in 3.22 seconds
-  50 parallel clients
-  3 bytes payload
-  keep alive: 1
-
-0.02% <= 0 milliseconds
-40.53% <= 1 milliseconds
-99.02% <= 2 milliseconds
-99.80% <= 3 milliseconds
-99.95% <= 4 milliseconds
-100.00% <= 8 milliseconds
-100.00% <= 9 milliseconds
-31037.24 requests per second
-

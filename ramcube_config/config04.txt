@@ -1,5 +1,0 @@
-me localhost#11114
-pings localhost#11112
-pings localhost#11113
-backups localhost#11111
-result_file result04.txt
