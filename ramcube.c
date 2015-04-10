@@ -161,7 +161,7 @@ typedef struct ConnProxy_s {
 
     char sendInfo[64];
     int outTimes;
-    SOCKADDR_IN m_sin;
+    //SOCKADDR_IN m_sin;
 }ConnProxy;
 
 typedef struct {
@@ -700,7 +700,7 @@ void read_cb(struct bufferevent *bev, void *ctx)
         }
 	}
 
-		
+        printf("read_cb:%s\n", currComm);
 
 	//FOR SPEED TEST ONLY!
 	//evbuffer_drain(p->input, DATA_BUFFER_SIZE);	
@@ -741,7 +741,7 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 	cp->m_outputBuffer = bufferevent_get_output(bufev);
 	cp->m_type = t;
     cp->outTimes = 0; //heartbeat times
-    cp->m_sin = config.me;
+    //cp->m_sin = config.me;
 	//for debugging on one node 
 	//pSin == NULL means this init is called by accept(). peerSin will be set 
 	//in a later process_command_TYPE()
@@ -754,6 +754,7 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 
 ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *left_com)
 {
+
     /* add recovery modle */
     //recoveryBackupConnect("127.0.0.1", 11121, c->thread->base);
 
@@ -765,7 +766,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 	ConnProxy *cp = (ConnProxy *)(c->ramcube_proxy);
 	char *comm = tokens[COMMAND_TOKEN].value;
 	assert(comm);
-	
+    printf("in ramcube_process_commands: %s+++++++++++++++++\n",comm);
 
 	if (ntokens == 4 && strcmp(comm, "TYPE") == 0 && cp->m_type == PROXY_TYPE_DATA_SERVER) {
 		process_command_TYPE(tokens, cp);
@@ -936,6 +937,8 @@ int process_command_TYPE(ramcube_token_t *tokens, ConnProxy *cp)
 				peerAddr, peerPort);
 
 		if (iCompareResult < 0) {  
+            //inet_aton(ip, &Sin.sin_addr);
+            //Sin.sin_port = htons(port);
 			enum proxy_type pt = (cp->m_type == PROXY_TYPE_BACKUP_SERVER 
 					? PROXY_TYPE_BACKUP_CLIENT : PROXY_TYPE_PING_CLIENT);
 			/*ConnProxy *cp2 =*/ connect_and_return_ConnProxy(cp->connection->thread->base, 
@@ -1195,7 +1198,8 @@ static void HB_cb(int fd, short event, void *arg) {
     } else {
         //TODO
         //search for recovery ConnProxy
-        searchRecoveryProxy("127.0.0.1", 11121, cp);
+        searchRecoveryProxy("127.0.0.1", 11114, cp);
+        searchRecoveryProxy("127.0.0.1", 11118, cp);
     }
 }
 
@@ -1240,25 +1244,28 @@ void searchRecoveryProxy(char *ip, int port, ConnProxy * cp) {
     for (i = 0; i < MAX_NEIGHBORS; ++i) {
         if (vpPingIn[i] == NULL) {
             break;
-        } else if (strcmp(ip, inet_ntoa(vpPingIn[i]->m_sin.sin_addr)) == 0
-                   && port == ntohs(vpPingIn[i]->m_sin.sin_port)){
-            printf("*>*>*>*>*> : send \"%s\" to %s : %d\n", cp->sendInfo,
-                   inet_ntoa(vpPingIn[i]->m_sin.sin_addr),
-                   ntohs(vpPingIn[i]->m_sin.sin_port));
+        } else {
+            char *pingIp = inet_ntoa(vpPingIn[i]->m_peerSin.sin_addr);
+            int pingPort = ntohs(vpPingIn[i]->m_peerSin.sin_port);
+            if (strcmp(ip, pingIp) == 0 && port == pingPort){
+            printf("*>*>*>*>*> : send \"%s\" to %s : %d\n", cp->sendInfo, pingIp, pingPort);
             evbuffer_add_printf(vpPingIn[i]->m_outputBuffer, "%s\r\n", cp->sendInfo);
             return;
+            }
         }
     }
     for (i = 0; i < MAX_NEIGHBORS; ++i) {
         if (vpPingOut[i] == NULL) {
             break;
-        } else if (strcmp(ip, inet_ntoa(vpPingOut[i]->m_sin.sin_addr)) == 0
-                   && port == ntohs(vpPingOut[i]->m_sin.sin_port)){
-            printf("*>*>*>*>*> : send \"%s\" to %s : %d\n", cp->sendInfo,
-                   inet_ntoa(vpPingOut[i]->m_sin.sin_addr),
-                   ntohs(vpPingOut[i]->m_sin.sin_port));
+        } else {
+            char *pingIp = inet_ntoa(vpPingOut[i]->m_peerSin.sin_addr);
+            int pingPort = ntohs(vpPingOut[i]->m_peerSin.sin_port);
+            if (strcmp(ip, pingIp) == 0
+                   && port == pingPort){
+            printf("*>*>*>*>*> : send \"%s\" to %s : %d\n", cp->sendInfo, pingIp, pingPort);
             evbuffer_add_printf(vpPingOut[i]->m_outputBuffer, "%s\r\n", cp->sendInfo);
             return;
+            }
         }
     }
 }
