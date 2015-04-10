@@ -1,2 +1,3 @@
-me localhost#11131
+coordinator localhost#11101
 pings localhost#11111
+pings localhost#11114

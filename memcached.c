@@ -3399,7 +3399,7 @@ static ulong process_command(conn *c, char *command, char *left_com) {
             ulong rtn = ramcube_process_commands(c, (void *)tokens, ntokens, left_com);
             if (rtn == 0)
                 conn_set_state(c, conn_new_cmd);
-            else if (rtn != -1) {
+            else if (rtn == 1) {
                 return rtn;
             }
             else
@@ -3533,13 +3533,9 @@ static int try_read_command(conn *c) {
 
         assert(cont <= (c->rcurr + c->rbytes));
         ulong rtn = process_command(c, c->rcurr, cont);
-        if (rtn != 0) {
+        if (rtn == 1) {
             c->rbytes = 0;
             c->rcurr = "";
-            //! we have store the data to memory, next we will send a reply to server
-            char str[100];
-            snprintf(str, 100, "BACKUP_REPLY %lu", rtn);
-            out_string(c, str);
 
         } else {
             c->rbytes -= (cont - c->rcurr);

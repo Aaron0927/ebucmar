@@ -98,7 +98,6 @@ typedef struct ramcube_config_s {
 	unsigned long missReadlns;
 
 	char resultFileName[100];
-
 	//int debugToDead;
 }ramcube_config_t;
 
@@ -162,6 +161,7 @@ typedef struct ConnProxy_s {
 
     char sendInfo[64];
     int outTimes;
+    SOCKADDR_IN m_sin;
 }ConnProxy;
 
 typedef struct {
@@ -218,7 +218,10 @@ void segmentToString(Segment *seg, char *str);
 //客户端发送心跳包
 void HeartBeat(char *Ip, int port, ConnProxy *cp, struct event_base *pBase);
 static void HB_cb(int fd, short ev, void *arg);
-void sendHeartBeat(ConnProxy * cp);
+int sendHeartBeat(ConnProxy * cp);
+char localname[16]; //record the type of me
+void searchRecoveryProxy(char *ip, int port, ConnProxy * cp);
+
 
 void ramcube_adjust_memcached_settings(settings_t *s)
 {	
@@ -239,7 +242,8 @@ void ramcube_adjust_memcached_settings(settings_t *s)
 	
     // just read the first line 
 	while (fscanf(f, "%s",str)!=EOF) {
-		if (strcmp(str, "me") == 0){
+        if (strcmp(str, "me") == 0){
+            strcpy(localname, str);
 			char name[100];
 			char *cport;
 			unsigned int iport;
@@ -258,7 +262,27 @@ void ramcube_adjust_memcached_settings(settings_t *s)
                 printf("fail to read!\n");
             }
             
-	    }
+        } else if (strcmp(str, "coordinator") == 0){
+            strcpy(localname, str);
+            char name[100];
+            char *cport;
+            unsigned int iport;
+            printf("++++++%s++++++++%s\n",ramcube_config_file, str);
+            if (fscanf(f, "%s", name) == 1) {
+                //char delim = '#';
+                printf("++++++++++++++%s\n",str);
+                cport = strstr(name, "#");
+                assert(cport != NULL);
+                cport++;
+                iport = atoi(cport);
+                s->port = iport;
+                printf("#port# changed to %d\n", s->port);
+            }
+            else {
+                printf("fail to read!\n");
+            }
+
+        }
     }
 }
 
@@ -328,7 +352,7 @@ void init_ramcube_config(const settings_t *settings)
                 //printf("fail to read!\n");
             }
         }
-		if (strcmp(s, "me") == 0){
+        if (strcmp(s, "me") == 0 || strcmp(s, "coordinator") == 0 ){
             if (fscanf(f, "%s", name) == 1) {
                 //printf("success to read me!\n\n");
             }
@@ -633,7 +657,7 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 				(type == PROXY_TYPE_PING_CLIENT ? "vpPingOut" : "vpRecoveryOut")));
 
 
-    if (type == PROXY_TYPE_PING_CLIENT){
+    if (strcmp(localname, "coordinator") == 0){
            /* 心跳机制 */
            HeartBeat("127.0.0.1", 11121, cp, pBase);
     }
@@ -670,7 +694,10 @@ void read_cb(struct bufferevent *bev, void *ctx)
 		if (ntokens == 3 && strcmp(currComm, "BACKUP_REPLY") == 0
 				&& cp->m_type == PROXY_TYPE_BACKUP_CLIENT) {
 			process_command_BACKUP_REPLY(tokens, cp);
-		}	
+        } else if (ntokens == 2 && strcmp(currComm, "ALIVE") == 0) { //heartbeat
+            printf("->->->->-> : receive \"ALIVE\" frome %s : %d\n", inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
+            --(cp->outTimes);
+        }
 	}
 
 		
@@ -714,7 +741,7 @@ int init_ConnProxy(struct bufferevent *bufev, enum proxy_type t,
 	cp->m_outputBuffer = bufferevent_get_output(bufev);
 	cp->m_type = t;
     cp->outTimes = 0; //heartbeat times
-
+    cp->m_sin = config.me;
 	//for debugging on one node 
 	//pSin == NULL means this init is called by accept(). peerSin will be set 
 	//in a later process_command_TYPE()
@@ -756,7 +783,14 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         //!!!!!!!!!!!!!!!! just for test
         //recoveryBackupConnect("127.0.0.1", 11114, c->thread->base);
 
-        return (ulong)cp->data_conn_ptr;  //! useful
+
+
+
+        //! we have store the data to memory, next we will send a reply to server
+        char str[100];
+        snprintf(str, 100, "BACKUP_REPLY %lu", (ulong)cp->data_conn_ptr);
+        out_string(c, str);
+        return 1;  //! useful
 	} 
 	/*"BACKUP_REPLY" is intercepted by read_cb, so the following is useless*/
 	else if (ntokens == 3 && strcmp(comm, "BACKUP_REPLY") == 0
@@ -768,12 +802,15 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
     else if (ntokens == 3 && strcmp(comm, "RECOVERY_REQUEST") == 0
              && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
         fprintf(stderr,"+++++++++++++++++++++++++++++receive recovery backup data\n");
-
+        return 0;
     }
     else if (ntokens == 2 && strcmp(comm, "HEARTBEAT") == 0) {
-        printf("->->->->receive heartbeat!\n");
+        printf("->->->->-> : receive \"HEARTBEAT\" frome %s : %d\n", inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
+        char *str = "ALIVE";
+        out_string(c, str);
+        printf("->->->->-> : send \"ALIVE\" to %s : %d\n", inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
+        return 1;
     }
-
 	return -1;
 }
 
@@ -1149,12 +1186,17 @@ void segmentToString(Segment *seg, char *str) {
 /* HB_cb heartbeat 回调函数 */
 static void HB_cb(int fd, short event, void *arg) {
     ConnProxy *cp = (ConnProxy *)arg;
-    sendHeartBeat(cp);
-    struct timeval tv;
-    tv.tv_sec = 2; //时间间隔
-    tv.tv_usec = 0; //微秒数
-    // 事件执行后,默认就被删除,需要重新add,使之重复执行
-    event_add(&(cp->evt), &tv);
+    if (sendHeartBeat(cp) == 1) {
+        struct timeval tv;
+        tv.tv_sec = 2; //时间间隔
+        tv.tv_usec = 0; //微秒数
+        // 事件执行后,默认就被删除,需要重新add,使之重复执行
+        event_add(&(cp->evt), &tv);
+    } else {
+        //TODO
+        //search for recovery ConnProxy
+        searchRecoveryProxy("127.0.0.1", 11121, cp);
+    }
 }
 
 
@@ -1163,27 +1205,62 @@ void HeartBeat(char *Ip, int port, ConnProxy *cp, struct event_base *pBase) {
     //struct event ev; //事件
     tv.tv_sec = 2; //时间间隔
     tv.tv_usec = 0; //微秒数
+    static bool initialized = false;
+    if(initialized) {
+        evtimer_del(&(cp->evt));
+    } else {
+        initialized = true;
+    }
     evtimer_set(&(cp->evt), HB_cb, cp);//初始化事件，并设置回调函数
     event_base_set(pBase, &(cp->evt));
     event_add(&(cp->evt), &tv); //注册事件
 }
 
-void sendHeartBeat(ConnProxy * cp) {
+int sendHeartBeat(ConnProxy * cp) {
     char peerIp[16] = "";
     int peerPort;
     strcpy(peerIp, inet_ntoa(cp->m_peerSin.sin_addr));
     peerPort = ntohs(cp->m_peerSin.sin_port);
     if (cp->outTimes < 5) {
-        strcpy(cp->sendInfo, "heartbeat");
-        evbuffer_add(cp->m_outputBuffer, cp->sendInfo, strlen(cp->sendInfo));
+        strcpy(cp->sendInfo, "HEARTBEAT");
+        evbuffer_add_printf(cp->m_outputBuffer, "%s\r\n", cp->sendInfo);
+        //evbuffer_add(cp->m_outputBuffer, cp->sendInfo, strlen(cp->sendInfo));
         ++(cp->outTimes);
         printf("->->->->-> : send \"%s\" to %s : %d\n", cp->sendInfo, peerIp, peerPort);
+        return 1;
     } else {
-
+        sprintf(cp->sendInfo, "CRASH:%s:%d", inet_ntoa(cp->m_peerSin.sin_addr),
+                ntohs(cp->m_peerSin.sin_port));  //int to char
+        return 0;
     }
+}
 
-
-
+void searchRecoveryProxy(char *ip, int port, ConnProxy * cp) {
+    int i;
+    for (i = 0; i < MAX_NEIGHBORS; ++i) {
+        if (vpPingIn[i] == NULL) {
+            break;
+        } else if (strcmp(ip, inet_ntoa(vpPingIn[i]->m_sin.sin_addr)) == 0
+                   && port == ntohs(vpPingIn[i]->m_sin.sin_port)){
+            printf("*>*>*>*>*> : send \"%s\" to %s : %d\n", cp->sendInfo,
+                   inet_ntoa(vpPingIn[i]->m_sin.sin_addr),
+                   ntohs(vpPingIn[i]->m_sin.sin_port));
+            evbuffer_add_printf(vpPingIn[i]->m_outputBuffer, "%s\r\n", cp->sendInfo);
+            return;
+        }
+    }
+    for (i = 0; i < MAX_NEIGHBORS; ++i) {
+        if (vpPingOut[i] == NULL) {
+            break;
+        } else if (strcmp(ip, inet_ntoa(vpPingOut[i]->m_sin.sin_addr)) == 0
+                   && port == ntohs(vpPingOut[i]->m_sin.sin_port)){
+            printf("*>*>*>*>*> : send \"%s\" to %s : %d\n", cp->sendInfo,
+                   inet_ntoa(vpPingOut[i]->m_sin.sin_addr),
+                   ntohs(vpPingOut[i]->m_sin.sin_port));
+            evbuffer_add_printf(vpPingOut[i]->m_outputBuffer, "%s\r\n", cp->sendInfo);
+            return;
+        }
+    }
 }
 
 
