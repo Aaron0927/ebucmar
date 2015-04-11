@@ -213,14 +213,31 @@ void send_string_via_out_cp(ConnProxy *, const char *);
 static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, const size_t max_tokens);
 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++//
-void send_to_recovery(ConnProxy *cp);
+void send_to_recovery(char *ip, int port, ConnProxy *cp);
 void segmentToString(Segment *seg, char *str);
 //客户端发送心跳包
-void HeartBeat(char *Ip, int port, ConnProxy *cp, struct event_base *pBase);
+void HeartBeat(ConnProxy *cp, struct event_base *pBase);
 static void HB_cb(int fd, short ev, void *arg);
 int sendHeartBeat(ConnProxy * cp);
 char localname[16]; //record the type of me
-void searchRecoveryProxy(char *ip, int port, ConnProxy * cp);
+void Recovery(ConnProxy * cp);
+//record brokenMaster and correspongding recovery
+ConnProxy *recoveryBackupConnect(char *Ip, int port, struct event_base *pBase);
+#define MAX_MSG_BUFFER	3
+#define MAX_HEARTBEAT_TIMES 3
+typedef struct brokenMaster {
+    char b_master_ip[16];
+    int b_master_port;
+    char b_backup_ip[16];
+    int b_backup_port;
+    char b_recovery_ip[16];
+    int b_recovery_port;
+    bool used;
+} BrokenMaster;
+
+BrokenMaster bokenMasterTable[MAX_MSG_BUFFER]; //it's enough to store infomation, when coordinator send the data, change used flag equal flase
+
+
 
 
 void ramcube_adjust_memcached_settings(settings_t *s)
@@ -659,7 +676,7 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 
     if (strcmp(localname, "coordinator") == 0){
            /* 心跳机制 */
-           HeartBeat("127.0.0.1", 11121, cp, pBase);
+           HeartBeat(cp, pBase);
     }
 	return cp;
 }
@@ -700,7 +717,7 @@ void read_cb(struct bufferevent *bev, void *ctx)
         }
 	}
 
-        printf("read_cb:%s\n", currComm);
+
 
 	//FOR SPEED TEST ONLY!
 	//evbuffer_drain(p->input, DATA_BUFFER_SIZE);	
@@ -766,7 +783,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 	ConnProxy *cp = (ConnProxy *)(c->ramcube_proxy);
 	char *comm = tokens[COMMAND_TOKEN].value;
 	assert(comm);
-    printf("in ramcube_process_commands: %s+++++++++++++++++\n",comm);
+    //printf("in ramcube_process_commands: %s+++++++++++++++++\n",comm);
 
 	if (ntokens == 4 && strcmp(comm, "TYPE") == 0 && cp->m_type == PROXY_TYPE_DATA_SERVER) {
 		process_command_TYPE(tokens, cp);
@@ -780,12 +797,6 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 
         //! add by Aaron on 1th April 2015
         appendToSegment(left_com); //receive data and store to memory
-
-        //!!!!!!!!!!!!!!!! just for test
-        //recoveryBackupConnect("127.0.0.1", 11114, c->thread->base);
-
-
-
 
         //! we have store the data to memory, next we will send a reply to server
         char str[100];
@@ -802,7 +813,17 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
     //++++++++++++recovery++++++++++++++//
     else if (ntokens == 3 && strcmp(comm, "RECOVERY_REQUEST") == 0
              && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
-        fprintf(stderr,"+++++++++++++++++++++++++++++receive recovery backup data\n");
+        printf("#########> receive recovery backup data, process... ...\n");
+
+
+        //! add by Aaron on 1th April 2015
+        //appendToSegment(left_com); //receive data and store to memory
+
+        //! we have store the data to memory, next we will send a reply to server
+        //char str[100];
+        //snprintf(str, 100, "BACKUP_REPLY %lu", (ulong)cp->data_conn_ptr);
+        //out_string(c, str);
+        //return 1;  //! useful
         return 0;
     }
     else if (ntokens == 2 && strcmp(comm, "HEARTBEAT") == 0) {
@@ -810,6 +831,33 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         char *str = "ALIVE";
         out_string(c, str);
         printf("->->->->-> : send \"ALIVE\" to %s : %d\n", inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
+        return 1;
+    }
+    else if (ntokens == 2 && strcmp(comm, "CRASH") == 0) {
+        char b_master_ip[16] = "";
+        int b_master_port = 0;
+        char b_recovery_ip[16] = "";
+        int b_recovery_port = 0;
+        char *delim = "\r\n :";
+        char *p;
+        strcpy(b_master_ip, strtok(left_com, delim));
+        while ((p = strtok(NULL, delim))) {
+            if (b_master_port == 0) {
+                b_master_port = atoi(p);
+            } else if (strcmp(b_recovery_ip, "") == 0 && strcmp(p, "RECOVERY") != 0) {
+                strcpy(b_recovery_ip, p);
+            } else if (b_recovery_port == 0 && strcmp(p, "RECOVERY") != 0) {
+                b_recovery_port = atoi(p);
+            }
+        }
+
+        printf("*>*>*>*>*> : receive \"CRASH:%s:%d RECOVERY:%s%d\"\n",
+               b_master_ip, b_master_port, b_recovery_ip, b_recovery_port);
+
+        ConnProxy *r_cp = recoveryBackupConnect(b_recovery_ip, b_recovery_port, cp->connection->thread->base);
+
+        send_to_recovery(b_master_ip, b_master_port, r_cp);
+
         return 1;
     }
 	return -1;
@@ -1136,7 +1184,7 @@ static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, c
 /*
  * recovery backup(revovery client) request to connect recovery master(recovery server)
  */
-void recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
+ConnProxy *recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
     /* check recoverymaster whether connect with me already */
     /*int i;
     for (i = 0; i < MAX_NEIGHBORS; i++) {
@@ -1150,20 +1198,24 @@ void recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
         }
     }*///disconsider this case, if backup is sending or receiving the msg, it will cause error
 
-
+    printf("---------> connecting recovery... ...\n");
     /* to connect recoverymaster */
     SOCKADDR_IN Sin = {0};
     inet_aton(ip, &Sin.sin_addr);
     Sin.sin_port = htons(port);
     Sin.sin_family = AF_INET;
     bzero(&(Sin.sin_zero), 8);
-    connect_and_return_ConnProxy(pBase, &Sin, PROXY_TYPE_RECOVERY_CLIENT);
+    ConnProxy *cp = connect_and_return_ConnProxy(pBase, &Sin, PROXY_TYPE_RECOVERY_CLIENT);
+    return cp;
 
 }
 
-void send_to_recovery(ConnProxy *cp)
+void send_to_recovery(char *ip, int port, ConnProxy *cp)
 {
-    Segment *seg = loadToMem("127.0.0.1.11114"); /* load data from disk to memory */
+    printf("+++++++++> send data to recovery\n");
+    char ipPort[32] = "";
+    sprintf(ipPort, "%s.%d", ip, port);
+    Segment *seg = loadToMem(ipPort); /* load data from disk to memory */
     char str[1024*10];
     segmentToString(seg, str);
     evbuffer_add_printf(cp->m_outputBuffer, "RECOVERY_REQUEST %lu\r\n",
@@ -1179,8 +1231,11 @@ void send_to_recovery(ConnProxy *cp)
  */
 void segmentToString(Segment *seg, char *str) {
     Seglet *let = seg->segleter;
+    char temp[1024] = "";
     while (let != NULL) {
-        strcpy(str, let->objector->command);
+        sprintf(temp, "$%s", let->objector->command);
+        strcat(str, temp);
+        memset(temp, 0, 1024);
         let = let->next;
     }
 }
@@ -1196,15 +1251,12 @@ static void HB_cb(int fd, short event, void *arg) {
         // 事件执行后,默认就被删除,需要重新add,使之重复执行
         event_add(&(cp->evt), &tv);
     } else {
-        //TODO
-        //search for recovery ConnProxy
-        searchRecoveryProxy("127.0.0.1", 11114, cp);
-        searchRecoveryProxy("127.0.0.1", 11118, cp);
+        Recovery(cp);
     }
 }
 
 
-void HeartBeat(char *Ip, int port, ConnProxy *cp, struct event_base *pBase) {
+void HeartBeat(ConnProxy *cp, struct event_base *pBase) {
     struct timeval tv; //设置定时器
     //struct event ev; //事件
     tv.tv_sec = 2; //时间间隔
@@ -1225,12 +1277,29 @@ int sendHeartBeat(ConnProxy * cp) {
     int peerPort;
     strcpy(peerIp, inet_ntoa(cp->m_peerSin.sin_addr));
     peerPort = ntohs(cp->m_peerSin.sin_port);
-    if (cp->outTimes < 5) {
-        strcpy(cp->sendInfo, "HEARTBEAT");
+    if (cp->outTimes < MAX_HEARTBEAT_TIMES) {
+        int i;
+        // check whether to send "crash" instead of "heartbeart"
+        for (i = 0; i < MAX_MSG_BUFFER; ++i) {
+            if (bokenMasterTable[i].used == true
+                    && strcmp(bokenMasterTable[i].b_backup_ip, peerIp) == 0
+                    && bokenMasterTable[i].b_backup_port == peerPort) {
+                char str[64] = "";
+                bokenMasterTable[i].used = false;
+                sprintf(str, "CRASH\n\r%s:%d RECOVERY %s:%d", bokenMasterTable[i].b_master_ip, bokenMasterTable[i].b_master_port,
+                        bokenMasterTable[i].b_recovery_ip, bokenMasterTable[i].b_recovery_port);
+                strcpy(cp->sendInfo, str);
+                break;
+            }
+        }
+        if (i == MAX_MSG_BUFFER) { //no node crash
+            strcpy(cp->sendInfo, "HEARTBEAT");
+        }
+
         evbuffer_add_printf(cp->m_outputBuffer, "%s\r\n", cp->sendInfo);
         //evbuffer_add(cp->m_outputBuffer, cp->sendInfo, strlen(cp->sendInfo));
         ++(cp->outTimes);
-        printf("->->->->-> : send \"%s\" to %s : %d\n", cp->sendInfo, peerIp, peerPort);
+        printf("\n*>*>*>*>*> : send \"%s\"  to  %s : %d\n", cp->sendInfo, peerIp, peerPort);
         return 1;
     } else {
         sprintf(cp->sendInfo, "CRASH:%s:%d", inet_ntoa(cp->m_peerSin.sin_addr),
@@ -1239,7 +1308,31 @@ int sendHeartBeat(ConnProxy * cp) {
     }
 }
 
-void searchRecoveryProxy(char *ip, int port, ConnProxy * cp) {
+void Recovery(ConnProxy * cp) {
+    //TODO should read from a conf
+    char b_master_ip[16];
+    strcpy(b_master_ip, inet_ntoa(cp->m_peerSin.sin_addr));
+    int b_master_port = ntohs(cp->m_peerSin.sin_port);
+    char b_backup_ip[16] = "127.0.0.1";
+    int b_backup_port = 11114;
+    char b_recovery_ip[16] = "127.0.0.1";
+    int b_recovery_port = 11121;
+    int i;
+
+    for (i = 0; i < MAX_MSG_BUFFER; ++i) {
+        if (bokenMasterTable[i].used == false) {
+            bokenMasterTable[i].used = true;
+            strcpy(bokenMasterTable[i].b_backup_ip, b_master_ip);
+            strcpy(bokenMasterTable[i].b_master_ip, b_backup_ip);
+            strcpy(bokenMasterTable[i].b_recovery_ip, b_recovery_ip);
+            bokenMasterTable[i].b_master_port = b_master_port;
+            bokenMasterTable[i].b_backup_port = b_backup_port;
+            bokenMasterTable[i].b_recovery_port = b_recovery_port;
+            return;
+        }
+    }
+
+    /*
     int i;
     for (i = 0; i < MAX_NEIGHBORS; ++i) {
         if (vpPingIn[i] == NULL) {
@@ -1267,7 +1360,9 @@ void searchRecoveryProxy(char *ip, int port, ConnProxy * cp) {
             return;
             }
         }
-    }
+    }*/
+
+
 }
 
 

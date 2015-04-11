@@ -11,6 +11,6 @@ ulong ramcube_post_set_data(conn *);
 
 extern char *ramcube_config_file; 
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++//
-void recoveryBackupConnect(char *Ip, int port, struct event_base *pBase);
+
 
 #endif // #ifndef RAMCUBE_H
