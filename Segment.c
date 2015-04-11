@@ -156,6 +156,7 @@ Segment *getLastSegment(SegmentManager *manager) {
 }
 
 void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) {
+
     SegmentManager *Iterator = Manager;
     char *IpPort = parseIpPort(cont);
     char *rip = getIp(IpPort);
@@ -327,6 +328,7 @@ int persist(Segment *seg) {
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//
 Segment *loadToMem(char *ipPort) {
 
+    printf("ipPort:%s\n", ipPort);
     int isFirst = 1; // using in while loop, to diff from others
     char dirName[128] = "";
     if (getcwd(dirName, 128) == NULL) { //get current directory

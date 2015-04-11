@@ -792,6 +792,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 	else if (ntokens == 3 && strcmp(comm, "BACKUP_REQUEST") == 0 
 			&& cp->m_type == PROXY_TYPE_BACKUP_SERVER) {
 		//prepare for handling backup 'set'
+        printf("backup receive data:%s\n\n", left_com);
         cp->data_conn_ptr = (void *)atol(tokens[DATA_CONN_PTR].value); //DATA_CONN_PTR=1
 		assert(cp->data_conn_ptr);
 
@@ -802,6 +803,12 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         char str[100];
         snprintf(str, 100, "BACKUP_REPLY %lu", (ulong)cp->data_conn_ptr);
         out_string(c, str);
+
+        //! test!!!!!!!!!!!!
+        //ConnProxy *r_cp = recoveryBackupConnect("127.0.0.1", 11121, cp->connection->thread->base);
+        //send_to_recovery("127.0.0.1", 11111, r_cp);
+        //! test over!!!!!!!!!!!
+
         return 1;  //! useful
 	} 
 	/*"BACKUP_REPLY" is intercepted by read_cb, so the following is useless*/
@@ -813,8 +820,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
     //++++++++++++recovery++++++++++++++//
     else if (ntokens == 3 && strcmp(comm, "RECOVERY_REQUEST") == 0
              && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
-        printf("#########> receive recovery backup data, process... ...\n");
-
+        printf("#########> receive recovery backup data : %s, process... ...\n", left_com);
 
         //! add by Aaron on 1th April 2015
         //appendToSegment(left_com); //receive data and store to memory
@@ -824,7 +830,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         //snprintf(str, 100, "BACKUP_REPLY %lu", (ulong)cp->data_conn_ptr);
         //out_string(c, str);
         //return 1;  //! useful
-        return 0;
+        return 2;
     }
     else if (ntokens == 2 && strcmp(comm, "HEARTBEAT") == 0) {
         printf("->->->->-> : receive \"HEARTBEAT\" frome %s : %d\n", inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
@@ -1010,12 +1016,13 @@ ulong ramcube_post_set_data(conn_t *c)
 
 	ConnProxy *cp = (ConnProxy *)(c->ramcube_proxy);
 	assert(cp);
-
-	if (cp->m_type == PROXY_TYPE_DATA_SERVER) {	
+    printf("^^^^^^^^^^^^^^^^^^^^^\n");
+    if (cp->m_type == PROXY_TYPE_DATA_SERVER
+            || cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
 		ConnProxy *cpBackup = get_backup_proxy_by_key(ITEM_key(it), it->nkey);
 		assert(cpBackup);	
 		send_unit_to_backup(cpBackup, it, (void *)c);	
-		
+        printf("*******************\n");
 		//out_string(c, "STORED");
 		//drive_machine(c);
 
@@ -1231,11 +1238,8 @@ void send_to_recovery(char *ip, int port, ConnProxy *cp)
  */
 void segmentToString(Segment *seg, char *str) {
     Seglet *let = seg->segleter;
-    char temp[1024] = "";
     while (let != NULL) {
-        sprintf(temp, "$%s", let->objector->command);
-        strcat(str, temp);
-        memset(temp, 0, 1024);
+        strcat(str, let->objector->command);
         let = let->next;
     }
 }
@@ -1364,6 +1368,7 @@ void Recovery(ConnProxy * cp) {
 
 
 }
+
 
 
 

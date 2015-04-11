@@ -3401,6 +3401,8 @@ static ulong process_command(conn *c, char *command, char *left_com) {
                 conn_set_state(c, conn_new_cmd);
             else if (rtn == 1) {
                 return rtn;
+            } else if (rtn == 2) {
+                return rtn;
             }
             else
                 out_string(c, "ERROR");
