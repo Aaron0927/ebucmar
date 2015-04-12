@@ -52,10 +52,10 @@ typedef struct segmentmanager {
 
 
 int getCapacity(const Segment *seg);
-char *parseIpPort(char *cont);
+void parseIpPort(char *cont, char *str);
 
-char *parseCommand(const char *cont, char *Iport);
-char *getIp(char *cont);
+void parseCommand(const char *cont, char *Iport, char *str);
+void getIp(char *cont, char *ip);
 int getPort(char *cont);
 int getObjectLength(const Seglet *seg);
 Object *getNextObject(const Seglet *seg);
@@ -77,7 +77,7 @@ Seglet *createSeglet(char *command);
 Segment *getLastSegment(SegmentManager *manager);
 void setSegletNum(Segment *seg);
 int getSegletNum(Segment *seg);
-
+int getCommandLen(const char *cont, char *Iport, char *str);
 //++++++++++++++++++++++++++++++++++ storage ++++++++++++++++++++++++++++++++++++++++++//
 int persist(Segment *seg);
 char  *mkStorage(char *dirname);

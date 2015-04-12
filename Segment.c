@@ -59,23 +59,22 @@ void setHead(Segment* seg, char *ip, int port) {
     seg->header.sin_port = port;
 }
 
-char *parseIpPort(char *cont) {
+void parseIpPort(char *cont, char *str) {
     int len = strlen(cont);
     //revome the last '\r\n'
     while(cont[len - 1] == '\r' || cont[len -1] == '\n') {
         --len;
     }
-    char *str = (char *)malloc(len + 1);
     memcpy(str, cont, len);
     str[len] = '\0';
     char *temp = strrchr(str, '\n');
     temp += 1; //skip '\n'
     strcpy(str, temp);
     str[strlen(str)] = '\0';// carefully using memcpy, start from 0
-    return str;
+    return;
 }
 
-char *parseCommand(const char *cont, char *Iport) {
+void parseCommand(const char *cont, char *Iport, char *str) {
     int len = strlen(cont);
     //revome the last '\r\n'
     while(cont[len - 1] == '\r' || cont[len -1] == '\n') {
@@ -84,23 +83,21 @@ char *parseCommand(const char *cont, char *Iport) {
     //remove the tail, change the cont background
     len = len - strlen(Iport);
     //! need to free
-    char *str = (char *)malloc(len + 1);
     memcpy(str, cont, len);
     str[len] = '\0';
-    return str;
+    return;
 }
 
 
 
-char *getIp(char *cont) {
-    char *ip = (char *)malloc(sizeof(char) * 20);
+void getIp(char *cont, char *ip) {
     int i = 0;
     while (cont[i]!= ':') {
         i++;
     }
     memcpy(ip, cont, i);
     ip[i] = '\0';
-    return ip;
+    return;
 }
 
 int getPort(char *cont) {
@@ -155,74 +152,155 @@ Segment *getLastSegment(SegmentManager *manager) {
     return iterator;
 }
 
+int getCommandLen(const char *cont, char *Iport, char *str) {
+    int len = strlen(cont);
+    //revome the last '\r\n'
+    while(cont[len - 1] == '\r' || cont[len -1] == '\n') {
+        --len;
+    }
+    //remove the tail, change the cont background
+    len = len - strlen(Iport);
+    return len;
+}
+
 void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) {
 
     SegmentManager *Iterator = Manager;
-    char *IpPort = parseIpPort(cont);
-    char *rip = getIp(IpPort);
+    char command[1024] = "";
+    char IpPort[32] = "";
+    char rip[16] = "";
+    int length = getCommandLen(cont, IpPort, command);
+    int flag1 = 0;
+    int flag2 = 0;
+    int i;
+    int j = 0;
+    bool is_done = false; //记录是否处理过
+    bool is_first = true; //记录是否是第一次处理
+    parseIpPort(cont, IpPort);
+    getIp(IpPort, rip);
     int rport = getPort(IpPort);
-    char *command = parseCommand(cont, IpPort);
-    free(IpPort);
 
-    //! if no Segment avaliable, try to create
-    if (Iterator->used == false) {
-        Iterator->segment = createSegment();
-        Iterator->segment->next = NULL;
-        setHead(Iterator->segment, rip, rport);
-        Iterator->used = true; //! set current segment is using
-        Iterator->segment->segleter = createSeglet(command);
-        //! we only replace select length with command length roughly
-        setCapacity(Iterator->segment, Iterator->segment->segleter->length);
-        setSegletNum(Iterator->segment);
-        Iterator->segment->p = Iterator->segment->segleter;
-        Iterator->segment->segleter->next = NULL;
-    } else {
-        Segment *currSeg = getSegment(Iterator, rip, rport);
-        if (currSeg == NULL) {
-            currSeg = getLastSegment(Iterator);
-            currSeg->next = createSegment();
-            currSeg->next->next = NULL;
-            setHead(currSeg->next, rip, rport);
-            //Iterator->used = true; //! set current segment is using
-            currSeg->next->segleter = createSeglet(command);
-            //! we only replace select length with command length roughly
-            setCapacity(currSeg->next, currSeg->next->segleter->length);
-            setSegletNum(Iterator->segment);
-            currSeg->next->p = currSeg->next->segleter;
-            currSeg->next->segleter->next = NULL;
-        } else {
-            //! Ip existed so free it
-            free(rip);
-            Seglet *seglet = currSeg->p;
-            seglet->next = createSeglet(command);
-            //! we only replace select length with command length roughly
-            setCapacity(currSeg, seglet->next->length);
-            setSegletNum(Iterator->segment);
-            seglet->next->next = NULL;
-            currSeg->p = seglet->next;
+    //parseCommand(cont, IpPort, command);
+
+    //由于从master收到的信息和recoverymaster收到的信息不一样
+    for (i = 0; i < length; ++i) {
+            if (flag1 < 2 ) {
+                command[j] = cont[i];
+                if (cont[i] == '\n') {
+                    ++flag1;
+                }
+                ++j;
+            } else if (flag2 < 2) {
+                if (is_done == false && is_first == true) { //是第一次处理，并且没有处理过
+                    //! if no Segment avaliable, try to create
+                    if (Iterator->used == false) {
+                        Iterator->segment = createSegment();
+                        Iterator->segment->next = NULL;
+                        setHead(Iterator->segment, rip, rport);
+                        Iterator->used = true; //! set current segment is using
+                        Iterator->segment->segleter = createSeglet(command);
+                        //! we only replace select length with command length roughly
+                        setCapacity(Iterator->segment, Iterator->segment->segleter->length);
+                        setSegletNum(Iterator->segment);
+                        Iterator->segment->p = Iterator->segment->segleter;
+                        Iterator->segment->segleter->next = NULL;
+                    } else {
+                        Segment *currSeg = getSegment(Iterator, rip, rport);
+                        if (currSeg == NULL) {
+                            currSeg = getLastSegment(Iterator);
+                            currSeg->next = createSegment();
+                            currSeg->next->next = NULL;
+                            setHead(currSeg->next, rip, rport);
+                            //Iterator->used = true; //! set current segment is using
+                            currSeg->next->segleter = createSeglet(command);
+                            //! we only replace select length with command length roughly
+                            setCapacity(currSeg->next, currSeg->next->segleter->length);
+                            setSegletNum(Iterator->segment);
+                            currSeg->next->p = currSeg->next->segleter;
+                            currSeg->next->segleter->next = NULL;
+                        } else {
+                            //! Ip existed so free it
+                            Seglet *seglet = currSeg->p;
+                            seglet->next = createSeglet(command);
+                            //! we only replace select length with command length roughly
+                            setCapacity(currSeg, seglet->next->length);
+                            setSegletNum(Iterator->segment);
+                            seglet->next->next = NULL;
+                            currSeg->p = seglet->next;
+                        }
+
+                    }
+
+                    //++++++++ storage strategy
+                    //我们persist的策略是：我们先设定一个segment长度为8MB，直到存到某一次数据超错8MB，
+                    //即最后segment的capacity数值<=64，64是经验值，已经存不下一个seglet。
+                    //这个时候我们启动persist
+                    Segment *segIterator = Manager->segment;
+                    while(segIterator != NULL) {
+                        //Segment *temp = segIterator->next;
+                        if (segIterator->header.capacity <= 8388585) { //8388585 just for test
+                            persist(segIterator);
+
+                            //test!!
+                            //if(segIterator->header.capacity <= 8388584) {
+                            //    Segment *tempSeg = loadToMem("127.0.0.1.11114");
+                            //    fprintf(stderr, "%d\n", tempSeg->header.capacity);
+                            //}
+                            //freeSegment(temp);
+
+                        }
+                        segIterator = segIterator->next;
+                    }
+                } else if (is_done == false ) {
+                    Segment *currSeg = getSegment(Iterator, rip, rport);
+                    //! Ip existed so free it
+                    Seglet *seglet = currSeg->p;
+                    seglet->next = createSeglet(command);
+                    //! we only replace select length with command length roughly
+                    setCapacity(currSeg, seglet->next->length);
+                    setSegletNum(Iterator->segment);
+                    seglet->next->next = NULL;
+                    currSeg->p = seglet->next;
+
+                    //++++++++ storage strategy
+                    //我们persist的策略是：我们先设定一个segment长度为8MB，直到存到某一次数据超错8MB，
+                    //即最后segment的capacity数值<=64，64是经验值，已经存不下一个seglet。
+                    //这个时候我们启动persist
+                    Segment *segIterator = Manager->segment;
+                    while(segIterator != NULL) {
+                        //Segment *temp = segIterator->next;
+                        if (segIterator->header.capacity <= 8388585) { //8388585 just for test
+                            persist(segIterator);
+
+                            //test!!
+                            //if(segIterator->header.capacity <= 8388584) {
+                            //    Segment *tempSeg = loadToMem("127.0.0.1.11114");
+                            //    fprintf(stderr, "%d\n", tempSeg->header.capacity);
+                            //}
+                            //freeSegment(temp);
+
+                        }
+                        segIterator = segIterator->next;
+                    }
+                }
+                if (cont[i] == '\r') {
+                    ++flag2;
+                }
+                is_done = true;
+                is_first = false;
+
+
+            } else {
+                is_done = false;
+                flag1 = 0;
+                flag2 = 0;
+                j = 0;
+                memset(command, 0, 1024);
+            }
         }
 
-    }
 
-    //++++++++ storage strategy
-    //我们persist的策略是：我们先设定一个segment长度为8MB，直到存到某一次数据超错8MB，
-    //即最后segment的capacity数值<=64，64是经验值，已经存不下一个seglet。
-    //这个时候我们启动persist
-    Segment *segIterator = Manager->segment;
-    while(segIterator != NULL) {
-        //Segment *temp = segIterator->next;
-        if (segIterator->header.capacity <= 8388585) { //8388585 just for test
-            persist(segIterator);
 
-            //test!!
-            //if(segIterator->header.capacity <= 8388584) {
-            //    Segment *tempSeg = loadToMem("127.0.0.1.11114");
-            //    fprintf(stderr, "%d\n", tempSeg->header.capacity);
-            //}
-            //freeSegment(temp);
-        }
-        segIterator = segIterator->next;
-    }
 
 }
 
