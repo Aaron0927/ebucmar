@@ -167,9 +167,9 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
 
     SegmentManager *Iterator = Manager;
     char command[1024] = "";
-    char IpPort[32] = "";
+    char IpPort[1024] = "";
     char rip[16] = "";
-    int length = getCommandLen(cont, IpPort, command);
+
     int flag1 = 0;
     int flag2 = 0;
     int i;
@@ -179,7 +179,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
     parseIpPort(cont, IpPort);
     getIp(IpPort, rip);
     int rport = getPort(IpPort);
-
+    int length = getCommandLen(cont, IpPort, command);
     //parseCommand(cont, IpPort, command);
 
     //由于从master收到的信息和recoverymaster收到的信息不一样
@@ -401,6 +401,7 @@ int persist(Segment *seg) {
     }
     free(maindir);
 
+
     return 0;
 }
 //++++++++++++++++++++++++++++++++++ recovery ++++++++++++++++++++++++++++++++++++++++++//
@@ -426,7 +427,7 @@ Segment *loadToMem(char *ipPort) {
         fprintf(stderr,"Error : open directory %s \n",dirName);
     }
 
-    Segment *currSeg, *head;
+    Segment *currSeg = NULL, *head = NULL;
 
     while( (ent = readdir(dir)) != NULL)
     {
@@ -469,23 +470,23 @@ Segment *readFile(char *dirName, char *fileName) {
         fprintf(stderr, "error to read\n");
     }
 
-    Seglet *let;
+    Seglet *let = NULL;
     int len = getSegmentLength(fileName);
     //before read we should reply the enough space to store read data
     int i = len;
     while (i != 0) {
         if (isFirst == 1) {
             let = (Seglet *)calloc(1, sizeof(Seglet));
-            fread(let, letSize, 1, fp);
+            if (fread(let, letSize, 1, fp) == 0);
             let->objector = (Object *)calloc(1, sizeof(Object));
-            fread(let->objector, objSize, 1, fp);
+            if (fread(let->objector, objSize, 1, fp) == 0);
             head->segleter = let;
             isFirst = 0;
         } else {
             let->next = (Seglet *)calloc(1, sizeof(Seglet));
-            fread(let->next, letSize, 1, fp);
+            if (fread(let->next, letSize, 1, fp) == 0);
             let->next->objector = (Object *)calloc(1, sizeof(Object));
-            fread(let->next->objector, objSize, 1, fp);
+            if (fread(let->next->objector, objSize, 1, fp) == 0);
             let = let->next;
         }
         --i;

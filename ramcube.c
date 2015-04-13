@@ -798,7 +798,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 
         //! add by Aaron on 1th April 2015
         appendToSegment(left_com); //receive data and store to memory
-
+printf("++++++++1212++++++\n\n");
         //! we have store the data to memory, next we will send a reply to server
         char str[100];
         snprintf(str, 100, "BACKUP_REPLY %lu", (ulong)cp->data_conn_ptr);
