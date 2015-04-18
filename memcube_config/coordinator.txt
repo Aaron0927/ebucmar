@@ -1,7 +1,5 @@
-coordinator localhost#11101
+me localhost#11101
 pings localhost#11111
 pings localhost#11114
 pings localhost#11118
 pings localhost#11121
-pings localhost#11124
-pings localhost#11128

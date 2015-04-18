@@ -221,6 +221,9 @@ static void HB_cb(int fd, short ev, void *arg);
 int sendHeartBeat(ConnProxy * cp);
 char localname[16]; //record the type of me
 void Recovery(ConnProxy * cp);
+
+void autoAddTimes(ConnProxy *cp, struct event_base *pBase);
+static void recovery_cb(int fd, short event, void *arg);
 //record brokenMaster and correspongding recovery
 ConnProxy *recoveryBackupConnect(char *Ip, int port, struct event_base *pBase);
 #define MAX_MSG_BUFFER	3
@@ -235,9 +238,25 @@ typedef struct brokenMaster {
     bool used;
 } BrokenMaster;
 
+// 一次最大链接的PRIMARY数目
+#define MAX_PRIMARY 5
+
+/*
+ * recovery接收到primary的信息后存储相关信息
+ * primary_ip和port用于记录是哪一个primary的心跳信号
+ * used表示这个结构体是否处于使用中
+ * MaxTimes是最大丢包次数
+ */
+typedef struct heartBeatInfo {
+    char b_primary_ip[16];
+    int b_primary_port;
+    int MaxTimes;
+    bool used;
+} HeartBeatInfo;
+
+HeartBeatInfo PrimaryTable[MAX_PRIMARY]; // 定义全局接受Primary HeartBeat的结构体
+
 BrokenMaster bokenMasterTable[MAX_MSG_BUFFER]; //it's enough to store infomation, when coordinator send the data, change used flag equal flase
-
-
 
 
 void ramcube_adjust_memcached_settings(settings_t *s)
@@ -280,6 +299,26 @@ void ramcube_adjust_memcached_settings(settings_t *s)
             }
             
         } else if (strcmp(str, "coordinator") == 0){
+            strcpy(localname, str);
+            char name[100];
+            char *cport;
+            unsigned int iport;
+            printf("++++++%s++++++++%s\n",ramcube_config_file, str);
+            if (fscanf(f, "%s", name) == 1) {
+                //char delim = '#';
+                printf("++++++++++++++%s\n",str);
+                cport = strstr(name, "#");
+                assert(cport != NULL);
+                cport++;
+                iport = atoi(cport);
+                s->port = iport;
+                printf("#port# changed to %d\n", s->port);
+            }
+            else {
+                printf("fail to read!\n");
+            }
+
+        } else if (strcmp(str, "primary") == 0){
             strcpy(localname, str);
             char name[100];
             char *cport;
@@ -369,7 +408,7 @@ void init_ramcube_config(const settings_t *settings)
                 //printf("fail to read!\n");
             }
         }
-        if (strcmp(s, "me") == 0 || strcmp(s, "coordinator") == 0 ){
+        if (strcmp(s, "me") == 0 || strcmp(s, "coordinator") == 0 || strcmp(s, "primary") == 0){
             if (fscanf(f, "%s", name) == 1) {
                 //printf("success to read me!\n\n");
             }
@@ -674,9 +713,18 @@ ConnProxy *connect_and_return_ConnProxy(struct event_base *pBase,
 				(type == PROXY_TYPE_PING_CLIENT ? "vpPingOut" : "vpRecoveryOut")));
 
 
-    if (strcmp(localname, "coordinator") == 0){
+    //if (strcmp(localname, "coordinator") == 0){
            /* 心跳机制 */
-           HeartBeat(cp, pBase);
+      //     HeartBeat(cp, pBase);
+    //}
+
+    /*
+     * primary第一步
+     * primary在接到链接请求后，如果自己是primary就发送心跳信号。
+     * 并不是所有的backup和ping我都启动心跳，只对ping启动心跳
+     */
+    if (strcmp(localname, "primary") == 0 && type == PROXY_TYPE_PING_CLIENT) {
+        HeartBeat(cp, pBase);
     }
 	return cp;
 }
@@ -832,11 +880,29 @@ printf("++++++++1212++++++\n\n");
         //return 1;  //! useful
         return 2;
     }
+    /*
+     * recovery第五步
+     * 接收到”HEARTBEAT"信息，进行处理
+     */
     else if (ntokens == 2 && strcmp(comm, "HEARTBEAT") == 0) {
         printf("->->->->-> : receive \"HEARTBEAT\" frome %s : %d\n", inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
-        char *str = "ALIVE";
-        out_string(c, str);
-        printf("->->->->-> : send \"ALIVE\" to %s : %d\n", inet_ntoa(cp->m_peerSin.sin_addr), ntohs(cp->m_peerSin.sin_port));
+        int i;
+        for (i = 0; i < MAX_PRIMARY; ++i) {
+            // 已经在Primary循环体中
+            if (strcmp(PrimaryTable[i].b_primary_ip, inet_ntoa(cp->m_peerSin.sin_addr)) == 0
+                       && PrimaryTable[i].b_primary_port == ntohs(cp->m_peerSin.sin_port)) {
+                --PrimaryTable[i].MaxTimes;
+                printf("MaxTimes: %d\n", PrimaryTable[i].MaxTimes);
+                break;
+            } else if (PrimaryTable[i].used == false) { // 找到一个没有使用的PrimaryTable空间
+                PrimaryTable[i].used = true;
+                strcpy(PrimaryTable[i].b_primary_ip, inet_ntoa(cp->m_peerSin.sin_addr));
+                PrimaryTable[i].b_primary_port = ntohs(cp->m_peerSin.sin_port);
+                autoAddTimes(cp, cp->connection->thread->base);
+                break;
+            }
+        }
+
         return 1;
     }
     else if (ntokens == 2 && strcmp(comm, "CRASH") == 0) {
@@ -1245,25 +1311,33 @@ void segmentToString(Segment *seg, char *str) {
 }
 
 /*+++++++++++++++++++++++++++++++++++++ 心跳机制 ++++++++++++++++++++++++++++++++++*/
-/* HB_cb heartbeat 回调函数 */
+
+
+/*
+ * primary第三步
+ * HB_cb是heartbeat回调函数
+ */
 static void HB_cb(int fd, short event, void *arg) {
     ConnProxy *cp = (ConnProxy *)arg;
     if (sendHeartBeat(cp) == 1) {
         struct timeval tv;
-        tv.tv_sec = 2; //时间间隔
+        tv.tv_sec = 1; //时间间隔
         tv.tv_usec = 0; //微秒数
         // 事件执行后,默认就被删除,需要重新add,使之重复执行
         event_add(&(cp->evt), &tv);
-    } else {
-        Recovery(cp);
     }
+    /*else {
+        Recovery(cp);
+    }*/
 }
 
-
+/*
+ * primary第二步
+ */
 void HeartBeat(ConnProxy *cp, struct event_base *pBase) {
     struct timeval tv; //设置定时器
     //struct event ev; //事件
-    tv.tv_sec = 2; //时间间隔
+    tv.tv_sec = 1; //时间间隔
     tv.tv_usec = 0; //微秒数
     static bool initialized = false;
     if(initialized) {
@@ -1276,12 +1350,16 @@ void HeartBeat(ConnProxy *cp, struct event_base *pBase) {
     event_add(&(cp->evt), &tv); //注册事件
 }
 
+/*
+ * primary第四步
+ * 向recovery发送“HEARTBEAT”
+ */
 int sendHeartBeat(ConnProxy * cp) {
     char peerIp[16] = "";
     int peerPort;
-    strcpy(peerIp, inet_ntoa(cp->m_peerSin.sin_addr));
+    strcpy(peerIp, inet_ntoa(cp->m_peerSin.sin_addr)); //是哪一个启动链接的，我就向那个发送Heartbeat
     peerPort = ntohs(cp->m_peerSin.sin_port);
-    if (cp->outTimes < MAX_HEARTBEAT_TIMES) {
+    /*if (cp->outTimes < MAX_HEARTBEAT_TIMES) {
         int i;
         // check whether to send "crash" instead of "heartbeart"
         for (i = 0; i < MAX_MSG_BUFFER; ++i) {
@@ -1296,20 +1374,20 @@ int sendHeartBeat(ConnProxy * cp) {
                 break;
             }
         }
-        if (i == MAX_MSG_BUFFER) { //no node crash
+        if (i == MAX_MSG_BUFFER) { //no node crash*/
             strcpy(cp->sendInfo, "HEARTBEAT");
-        }
+        //}
 
         evbuffer_add_printf(cp->m_outputBuffer, "%s\r\n", cp->sendInfo);
         //evbuffer_add(cp->m_outputBuffer, cp->sendInfo, strlen(cp->sendInfo));
         ++(cp->outTimes);
         printf("\n*>*>*>*>*> : send \"%s\"  to  %s : %d\n", cp->sendInfo, peerIp, peerPort);
         return 1;
-    } else {
+    /*} else {
         sprintf(cp->sendInfo, "CRASH:%s:%d", inet_ntoa(cp->m_peerSin.sin_addr),
                 ntohs(cp->m_peerSin.sin_port));  //int to char
         return 0;
-    }
+    }*/
 }
 
 void Recovery(ConnProxy * cp) {
@@ -1367,6 +1445,58 @@ void Recovery(ConnProxy * cp) {
     }*/
 
 
+}
+
+
+
+
+
+/*
+ * recovery第七步
+ */
+
+static void recovery_cb(int fd, short event, void *arg) {
+    ConnProxy *cp = (ConnProxy *)arg;
+    int i;
+    // 在PrimaryTable中找到对应的primary信息
+    for (i = 0; i < MAX_PRIMARY; ++i) {
+        if (strcmp(PrimaryTable[i].b_primary_ip, inet_ntoa(cp->m_peerSin.sin_addr)) == 0
+                   && PrimaryTable[i].b_primary_port == ntohs(cp->m_peerSin.sin_port)) {
+            ++PrimaryTable[i].MaxTimes; //次数加1
+            printf("MaxTimes: %d\n", PrimaryTable[i].MaxTimes);
+
+            // 如果有2s没有收到primary心跳，则向coordinator发送信息
+            if (PrimaryTable[i].MaxTimes > 2) {
+
+                return;
+            }
+        }
+    }
+
+    struct timeval tv;
+    tv.tv_sec = 1; //时间间隔
+    tv.tv_usec = 0; //微秒数
+    // 事件执行后,默认就被删除,需要重新add,使之重复执行
+    event_add(&(cp->evt), &tv);
+}
+
+/*
+ * recovery第六步
+ */
+void autoAddTimes(ConnProxy *cp, struct event_base *pBase) {
+    struct timeval tv; //设置定时器
+    //struct event ev; //事件
+    tv.tv_sec = 1; //时间间隔
+    tv.tv_usec = 0; //微秒数
+    static bool initialized = false;
+    if(initialized) {
+        evtimer_del(&(cp->evt));
+    } else {
+        initialized = true;
+    }
+    evtimer_set(&(cp->evt), recovery_cb, cp);//初始化事件，并设置回调函数
+    event_base_set(pBase, &(cp->evt));
+    event_add(&(cp->evt), &tv); //注册事件
 }
 
 

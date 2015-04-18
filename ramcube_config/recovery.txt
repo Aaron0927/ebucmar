@@ -1,4 +1,0 @@
-me localhost#11121
-backups localhost#11124
-backups localhost#11128
-pings localhost#11101

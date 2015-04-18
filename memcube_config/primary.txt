@@ -1,4 +1,4 @@
-me localhost#11111
+primary localhost#11111
 backups localhost#11114
 backups localhost#11118
-pings localhost#11101
+pings localhost#11121
