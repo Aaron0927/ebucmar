@@ -146,7 +146,7 @@ int getSegletNum(Segment *seg) {
 Segment *getLastSegment(SegmentManager *manager) {
     Segment *iterator = manager->segment;
 
-    while (iterator->next != NULL) {
+    while (iterator != NULL) {
         iterator = iterator->next;
     }
     return iterator;
@@ -183,7 +183,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
     //parseCommand(cont, IpPort, command);
 
     //由于从master收到的信息和recoverymaster收到的信息不一样
-    for (i = 0; i < length; ++i) {
+    for (i = 0; i <= length; ++i) {
             if (flag1 < 2 ) {
                 command[j] = cont[i];
                 if (cont[i] == '\n') {
@@ -205,19 +205,34 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                         Iterator->segment->p = Iterator->segment->segleter;
                         Iterator->segment->segleter->next = NULL;
                     } else {
-                        Segment *currSeg = getSegment(Iterator, rip, rport);
+                        Segment *currSeg = getSegment(Iterator, rip, rport); //在Manager中找这个segment
                         if (currSeg == NULL) {
-                            currSeg = getLastSegment(Iterator);
-                            currSeg->next = createSegment();
-                            currSeg->next->next = NULL;
-                            setHead(currSeg->next, rip, rport);
-                            //Iterator->used = true; //! set current segment is using
-                            currSeg->next->segleter = createSeglet(command);
-                            //! we only replace select length with command length roughly
-                            setCapacity(currSeg->next, currSeg->next->segleter->length);
-                            setSegletNum(Iterator->segment);
-                            currSeg->next->p = currSeg->next->segleter;
-                            currSeg->next->segleter->next = NULL;
+                            currSeg = getLastSegment(Iterator); //找到最后一个segment位置
+                            if (currSeg != NULL)
+                            {
+                                currSeg->next = createSegment();
+                                currSeg->next->next = NULL;
+                                setHead(currSeg->next, rip, rport);
+                                //Iterator->used = true; //! set current segment is using
+                                currSeg->next->segleter = createSeglet(command);
+                                //! we only replace select length with command length roughly
+                                setCapacity(currSeg->next, currSeg->next->segleter->length);
+                                setSegletNum(Iterator->segment);
+                                currSeg->next->p = currSeg->next->segleter;
+                                currSeg->next->segleter->next = NULL;
+                            } else {
+                                Iterator->segment = createSegment();
+                                Iterator->segment->next = NULL;
+                                setHead(Iterator->segment, rip, rport);
+                                //Iterator->used = true; //! set current segment is using
+                                Iterator->segment->segleter = createSeglet(command);
+                                //! we only replace select length with command length roughly
+                                setCapacity(Iterator->segment, Iterator->segment->segleter->length);
+                                setSegletNum(Iterator->segment);
+                                Iterator->segment->p = Iterator->segment->segleter;
+                                Iterator->segment->segleter->next = NULL;
+                            }
+
                         } else {
                             //! Ip existed so free it
                             Seglet *seglet = currSeg->p;
@@ -236,8 +251,9 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                     //即最后segment的capacity数值<=64，64是经验值，已经存不下一个seglet。
                     //这个时候我们启动persist
                     Segment *segIterator = Manager->segment;
+                    int flag3 = 1; //表示manager后面第一个segment
                     while(segIterator != NULL) {
-                        //Segment *temp = segIterator->next;
+                        Segment *temp = segIterator->next;
                         if (segIterator->header.capacity <= 8388585) { //8388585 just for test
                             persist(segIterator);
 
@@ -246,10 +262,17 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                             //    Segment *tempSeg = loadToMem("127.0.0.1.11114");
                             //    fprintf(stderr, "%d\n", tempSeg->header.capacity);
                             //}
-                            //freeSegment(temp);
+                            freeSegment(segIterator);
+                            //segIterator = temp;
 
                         }
-                        segIterator = segIterator->next;
+                        if (flag3 == 1) {
+                            Manager->segment = temp;
+                        }
+                        if (temp != NULL) {
+                            flag3 = 0;
+                        }
+                        segIterator = temp;
                     }
                 } else if (is_done == false ) {
                     Segment *currSeg = getSegment(Iterator, rip, rport);
@@ -267,8 +290,9 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                     //即最后segment的capacity数值<=64，64是经验值，已经存不下一个seglet。
                     //这个时候我们启动persist
                     Segment *segIterator = Manager->segment;
+                    int flag3 = 1; //表示manager后面第一个segment
                     while(segIterator != NULL) {
-                        //Segment *temp = segIterator->next;
+                        Segment *temp = segIterator->next;
                         if (segIterator->header.capacity <= 8388585) { //8388585 just for test
                             persist(segIterator);
 
@@ -277,10 +301,17 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                             //    Segment *tempSeg = loadToMem("127.0.0.1.11114");
                             //    fprintf(stderr, "%d\n", tempSeg->header.capacity);
                             //}
-                            //freeSegment(temp);
+                            freeSegment(segIterator);
+                            //segIterator = temp;
 
                         }
-                        segIterator = segIterator->next;
+                        if (flag3 == 1) {
+                            Manager->segment = temp;
+                        }
+                        if (temp != NULL) {
+                            flag3 = 0;
+                        }
+                        segIterator = temp;
                     }
                 }
                 if (cont[i] == '\r') {
