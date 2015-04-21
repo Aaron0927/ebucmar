@@ -977,17 +977,63 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         while ((p = strtok(NULL, delim))) {
             b_primary_port = atoi(p);
         }
-
         strcpy(b_recovery_ip, inet_ntoa(cp->m_peerSin.sin_addr));
-        b_recovery_port = atoi(cp->m_peerSin.sin_port);
+        b_recovery_port = ntohs(cp->m_peerSin.sin_port);
+        printf("*>*>*>*>*> : receive \"CRASH:%s:%d\"\n", b_primary_ip, b_primary_port);
 
-        printf("*>*>*>*>*> : receive \"CRASH:%s:%d \"\n", b_primary_ip, b_primary_port);
+        // 第10步 找到primary对应的backup,暂时地址是手动设置
+        char backupIp[16] = "127.0.0.1";
+        int backupPort = 11114;
+        int i;
+        for (i = 0; i < MAX_NEIGHBORS; i++) {
+            if (vpCoordinatorOut[i] == NULL) {
+                break;
+            } else if (strcmp(inet_ntoa(vpCoordinatorOut[i]->m_peerSin.sin_addr), backupIp) == 0
+                && backupPort == ntohs(vpCoordinatorOut[i]->m_peerSin.sin_port)) {
 
+                // 第11步 找到相应的backup，向backup发送信息
+                // 为了简单处理，前面的IP:PORT是primary信息，后面的IP:PORT是recovery的信息
+                evbuffer_add_printf(vpCoordinatorOut[i]->m_outputBuffer, "CRASHED\n\r%s:%d %s:%d",
+                                    b_primary_ip, b_primary_port, b_recovery_ip, b_recovery_port);
+                return 1;
+
+            }
+
+
+        }
 
         //ConnProxy *r_cp = recoveryBackupConnect(b_recovery_ip, b_recovery_port, cp->connection->thread->base);
 
         //send_to_recovery(b_primary_ip, b_primary_port, r_cp);
 
+        return 1;
+    }
+    // 第12步 backup收到coordinator信息
+    else if (ntokens == 2 && strcmp(comm, "CRASHED") == 0) {
+        char b_primary_ip[16] = "";
+        int b_primary_port = 0;
+        char b_recovery_ip[16] = "";
+        int b_recovery_port = 0;
+        char *delim = "\r\n :";
+        char *p;
+        strcpy(b_primary_ip, strtok(left_com, delim));
+        while ((p = strtok(NULL, delim))) {
+            if (b_primary_port == 0) {
+                b_primary_port = atoi(p);
+            } else if (strcmp(b_recovery_ip, "") == 0) {
+                strcmp(b_recovery_ip, p);
+            } else if (b_recovery_port == 0) {
+                b_recovery_port = atoi(p);
+            }
+        }
+        printf("*>*>*>*>*> : receive \"CRASH:%s:%d RECOVERY:%s:%d\"\n",
+               b_primary_ip, b_primary_port, b_recovery_ip, b_recovery_port);
+
+        // 第13步 连接recovery
+        ConnProxy *r_cp = recoveryBackupConnect(b_recovery_ip, b_recovery_port, cp->connection->thread->base);
+
+        //第14布 发送数据给recovery
+        send_to_recovery(b_primary_ip, b_primary_port, r_cp);
         return 1;
     }
     // 第12****步 backup收到数据请求信息
@@ -1347,8 +1393,7 @@ static size_t ramcube_tokenize_command(char *command, ramcube_token_t *tokens, c
 //++++++++++++++++++++++++++++++++++ recoveryBackupConnect ++++++++++++++++++++++++++++++++++++++//
 
 /*
- * recovery第9***步
- * 请求和backup连接
+ * 第13步 连接recovery
  */
 ConnProxy *recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
     /* check recoverymaster whether connect with me already */
@@ -1364,7 +1409,7 @@ ConnProxy *recoveryBackupConnect(char *ip, int port, struct event_base *pBase) {
         }
     }*///disconsider this case, if backup is sending or receiving the msg, it will cause error
 
-    printf("---------> connecting backup... ...\n");
+    printf("---------> connecting recovery... ...\n");
     /* to connect recoverymaster */
     SOCKADDR_IN Sin = {0};
     inet_aton(ip, &Sin.sin_addr);
