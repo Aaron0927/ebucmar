@@ -881,6 +881,7 @@ static void complete_nread_ascii(conn *c) {
       case STORED:
 	      if (ramcube_config_file) {
 		  	//primary should ONLY send "STORED" to client after receiving backup's confirm
+            //第16步 recovery收到信息后向backup 发送信息
 			ulong rtn = ramcube_post_set_data(c);
 			if (rtn == 0) { //! 0 means DATA_SERVER
 				//out_string(c, "STORED"); //this is for test ONLY!		

@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <ctype.h>
-
+#include "time.h"
 #include "memcached.h"
 #include "hash.h"
 #include "ramcube.h"
@@ -925,7 +925,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
 		process_command_BACKUP_REPLY(tokens, cp);
 		return 0;
 	}	
-    //++++++++++++recovery++++++++++++++//
+    // 第15步 recovery接收到backup发来的数据，进行处理
     else if (ntokens == 3 && strcmp(comm, "RECOVERY_REQUEST") == 0
              && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
         printf("#########> receive recovery backup data : %s, process... ...\n", left_com);
@@ -1021,7 +1021,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
             if (b_primary_port == 0) {
                 b_primary_port = atoi(p);
             } else if (strcmp(b_recovery_ip, "") == 0) {
-                strcmp(b_recovery_ip, p);
+                strcpy(b_recovery_ip, p);
             } else if (b_recovery_port == 0) {
                 b_recovery_port = atoi(p);
             }
@@ -1032,7 +1032,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         // 第13步 连接recovery
         ConnProxy *r_cp = recoveryBackupConnect(b_recovery_ip, b_recovery_port, cp->connection->thread->base);
 
-        //第14布 发送数据给recovery
+        //第14步 发送数据给recovery
         send_to_recovery(b_primary_ip, b_primary_port, r_cp);
         return 1;
     }
@@ -1210,6 +1210,7 @@ int process_command_TYPE(ramcube_token_t *tokens, ConnProxy *cp)
 	return -1;
 }
 
+//第16步 recovery收到信息后向backup 发送信息
 ulong ramcube_post_set_data(conn_t *c) 
 {
 	//int i;
@@ -1225,7 +1226,9 @@ ulong ramcube_post_set_data(conn_t *c)
             || cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
 		ConnProxy *cpBackup = get_backup_proxy_by_key(ITEM_key(it), it->nkey);
 		assert(cpBackup);	
-		send_unit_to_backup(cpBackup, it, (void *)c);	
+        if (cpBackup != NULL) {
+            send_unit_to_backup(cpBackup, it, (void *)c);
+        }
         printf("*******************\n");
 		//out_string(c, "STORED");
 		//drive_machine(c);
@@ -1428,20 +1431,30 @@ void send_request_to_backup(ConnProxy *cp) {
             (ulong)cp);
 }
 
-//
+// 第14步 发送数据给recovery
 void send_to_recovery(char *ip, int port, ConnProxy *cp)
 {
     printf("+++++++++> send data to recovery: ");
     char ipPort[32] = "";
     sprintf(ipPort, "%s.%d", ip, port);
+
+
+    clock_t start, finish; //生命start和finish是两个时间
+    double time; //定义运行时间
+    start = clock(); //获取开始时间
     Segment *seg = loadToMem(ipPort); /* load data from disk to memory */
+    finish = clock(); //获取完成时间
+    time = (double)(finish - start) / CLOCKS_PER_SEC; //CLOCKS_PER_SEC，它用来表示一秒钟会有多少个时钟计时单元，进行计算，完成的时间减去开始的时间获得算法运行时间
+    printf( "运行时间为\n%f 秒\n",time);//显示
+
+
     char str[1024*10];
     segmentToString(seg, str);
     evbuffer_add_printf(cp->m_outputBuffer, "RECOVERY_REQUEST %lu\r\n",
             (ulong)cp);
-    //printf("\"%s\"", str);
-    //evbuffer_add(cp->m_outputBuffer, str, strlen(str));
-    //evbuffer_add_printf(cp->m_outputBuffer, "%s:%d\r\n", config.myAddr, config.myPort);
+    printf("\"%s\"", str);
+    evbuffer_add(cp->m_outputBuffer, str, strlen(str));
+    evbuffer_add_printf(cp->m_outputBuffer, "%s:%d\r\n", config.myAddr, config.myPort);
 
 }
 
@@ -1521,8 +1534,9 @@ int sendHeartBeat(ConnProxy * cp) {
             }
         }
         if (i == MAX_MSG_BUFFER) { //no node crash*/
-            strcpy(cp->sendInfo, "HEARTBEAT");
+        strcpy(cp->sendInfo, "HEARTBEAT");
         //}
+
 
         evbuffer_add_printf(cp->m_outputBuffer, "%s\r\n", cp->sendInfo);
         //evbuffer_add(cp->m_outputBuffer, cp->sendInfo, strlen(cp->sendInfo));

@@ -16,7 +16,7 @@
 Segment *recoverySubSeg; //receive a segment point when recovery
 SegmentManager *Manager;
 //! max segment is 8MB
-#define MAX_SEGMENT_CAPACITY   1024 * 8//1024 * 1024 * 8
+#define MAX_SEGMENT_CAPACITY   1024 * 1024 * 1024//1024 * 1024 * 8
 /*
 Segment init_Segment(void) {
     Segment seg;
@@ -235,6 +235,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
 
                         } else {
                             //! Ip existed so free it
+                            printf("ip existed\n");
                             Seglet *seglet = currSeg->p;
                             seglet->next = createSeglet(command);
                             //! we only replace select length with command length roughly
@@ -254,7 +255,8 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                     int flag3 = 1; //表示manager后面第一个segment
                     while(segIterator != NULL) {
                         Segment *temp = segIterator->next;
-                        if (segIterator->header.capacity <= MAX_SEGMENT_CAPACITY) { //8388585 just for test
+                        printf("%d  @@@@@@@@@@@@@@@@\n", segIterator->header.capacity);
+                        if (segIterator->header.capacity < 0) { //8388585 just for test
                             persist(segIterator);
 
                             //test!!
@@ -264,14 +266,15 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                             //}
                             freeSegment(segIterator);
                             //segIterator = temp;
+                            if (flag3 == 1) {
+                                Manager->segment = temp;
+                            }
+                            if (temp != NULL) {
+                                flag3 = 0;
+                            }
 
                         }
-                        if (flag3 == 1) {
-                            Manager->segment = temp;
-                        }
-                        if (temp != NULL) {
-                            flag3 = 0;
-                        }
+
                         segIterator = temp;
                     }
                 } else if (is_done == false ) {
@@ -293,7 +296,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                     int flag3 = 1; //表示manager后面第一个segment
                     while(segIterator != NULL) {
                         Segment *temp = segIterator->next;
-                        if (segIterator->header.capacity <= MAX_SEGMENT_CAPACITY) { //8388585 just for test
+                        if (segIterator->header.capacity < 0) { //8388585 just for test
                             persist(segIterator);
 
                             //test!!
@@ -303,14 +306,15 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                             //}
                             freeSegment(segIterator);
                             //segIterator = temp;
+                            if (flag3 == 1) {
+                                Manager->segment = temp;
+                            }
+                            if (temp != NULL) {
+                                flag3 = 0;
+                            }
 
                         }
-                        if (flag3 == 1) {
-                            Manager->segment = temp;
-                        }
-                        if (temp != NULL) {
-                            flag3 = 0;
-                        }
+
                         segIterator = temp;
                     }
                 }
@@ -379,7 +383,7 @@ int persist(Segment *seg) {
     FILE *fp;
     time_t t;
     time(&t); //! add time after filename
-
+    printf("persist!!!!!!!!!!!!!!!!!!!!!!\n");
     char *maindir = (char *)malloc(128);
     if (getcwd(maindir, 128) == NULL) { //get current directory
         fprintf(stderr, "error to ge cwd\n");
