@@ -1,4 +1,4 @@
-me localhost#11121
-pings localhost#11111
+me 10.107.19.8#11121
+pings 10.0.1.1#11111
 backups localhost#11124
-coordinators localhost#11101
+coordinators 10.0.1.1#11101

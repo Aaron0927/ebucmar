@@ -15,7 +15,7 @@
 #include "ramcube.h"
 #include "Log.h"
 #include "Segment.h"
-
+#include <sys/timeb.h>
 //vpBackupNames and vpBackupOut might change to arrays
 // for consistent hash. for that, we should have a fixed name-to-index mapping
 //vector<SOCKADDR_IN *> vpBackupSins, vpPingSins;
@@ -268,7 +268,11 @@ typedef struct heartBeatInfo {
 HeartBeatInfo PrimaryTable[MAX_PRIMARY]; // 定义全局接受Primary HeartBeat的结构体
 
 BrokenMaster bokenMasterTable[MAX_MSG_BUFFER]; //it's enough to store infomation, when coordinator send the data, change used flag equal flase
-
+static long long getSystemTime() {
+    struct timeb t;
+    ftime(&t);
+    return 1000 * t.time + t.millitm;
+}
 
 void ramcube_adjust_memcached_settings(settings_t *s)
 {	
@@ -928,7 +932,10 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
     // 第15步 recovery接收到backup发来的数据，进行处理
     else if (ntokens == 3 && strcmp(comm, "RECOVERY_REQUEST") == 0
              && cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
-        printf("#########> receive recovery backup data : %s, process... ...\n", left_com);
+        long long start=getSystemTime();//test
+        printf("+++++++++start time: %lld ms\n", start);//test
+        int len = strlen(left_com);
+        printf("#########> receive recovery backup data : %d, process... ...\n", len);
 
         //! add by Aaron on 1th April 2015
         //appendToSegment(left_com); //receive data and store to memory
@@ -982,7 +989,7 @@ ulong ramcube_process_commands(conn *c, void *t, const size_t ntokens, char *lef
         printf("*>*>*>*>*> : receive \"CRASH:%s:%d\"\n", b_primary_ip, b_primary_port);
 
         // 第10步 找到primary对应的backup,暂时地址是手动设置
-        char backupIp[16] = "127.0.0.1";
+        char backupIp[16] = "10.107.19.9";
         int backupPort = 11114;
         int i;
         for (i = 0; i < MAX_NEIGHBORS; i++) {
@@ -1224,6 +1231,8 @@ ulong ramcube_post_set_data(conn_t *c)
     printf("^^^^^^^^^^^^^^^^^^^^^\n");
     if (cp->m_type == PROXY_TYPE_DATA_SERVER
             || cp->m_type == PROXY_TYPE_RECOVERY_SERVER) {
+
+        // 这里提供了一种通过hash来查询将某个Key-Value对存储到哪个backup上
 		ConnProxy *cpBackup = get_backup_proxy_by_key(ITEM_key(it), it->nkey);
 		assert(cpBackup);	
         if (cpBackup != NULL) {
@@ -1288,7 +1297,8 @@ ConnProxy *get_backup_proxy_by_key(const char *key, size_t nkey)
 void send_unit_to_backup(ConnProxy *cpBackupOut, item *unit, void *data_conn_ptr) 
 {
     Object obj = setCommandServer(ITEM_key(unit), ITEM_data(unit), unit->nbytes - 2);
-    size_t nBuf = evbuffer_get_length(cpBackupOut->m_outputBuffer);
+    printf("here happend aborted ???\n");
+    size_t nBuf;// = evbuffer_get_length(cpBackupOut->m_outputBuffer);
     fprintf(stderr,"++++++++++%lu\n", nBuf);
 	//assert(comm);
 	//send_string(comm);
@@ -1431,6 +1441,8 @@ void send_request_to_backup(ConnProxy *cp) {
             (ulong)cp);
 }
 
+
+
 // 第14步 发送数据给recovery
 void send_to_recovery(char *ip, int port, ConnProxy *cp)
 {
@@ -1441,18 +1453,33 @@ void send_to_recovery(char *ip, int port, ConnProxy *cp)
 
     clock_t start, finish; //生命start和finish是两个时间
     double time; //定义运行时间
+
     start = clock(); //获取开始时间
-    Segment *seg = loadToMem(ipPort); /* load data from disk to memory */
+    Segment *seg = loadToMem(ipPort);
     finish = clock(); //获取完成时间
     time = (double)(finish - start) / CLOCKS_PER_SEC; //CLOCKS_PER_SEC，它用来表示一秒钟会有多少个时钟计时单元，进行计算，完成的时间减去开始的时间获得算法运行时间
     printf( "运行时间为\n%f 秒\n",time);//显示
 
-
-    char str[1024*10];
+    start = clock(); //获取开始时间
+    char *str = (char*)malloc(sizeof(char) * 1024 * 1024 * 1024 * 4);
     segmentToString(seg, str);
+    finish = clock(); //获取完成时间
+    time = (double)(finish - start) / CLOCKS_PER_SEC; //CLOCKS_PER_SEC，它用来表示一秒钟会有多少个时钟计时单元，进行计算，完成的时间减去开始的时间获得算法运行时间
+    printf( "运行时间为\n%f 秒\n",time);//显示
+    fprintf(stderr, "准备发送数据...");
+
+ /*
+    //测试
+    char *str = (char*)malloc(sizeof(char) * 1024 * 1024 * 1024);//test
+
+    memset(str, 'a', 1024 * 1024 * 1024);//test
+
+    long long start=getSystemTime();//test
+    printf("start time: %lld ms\n", start);//test
+*/
     evbuffer_add_printf(cp->m_outputBuffer, "RECOVERY_REQUEST %lu\r\n",
             (ulong)cp);
-    printf("\"%s\"", str);
+    //printf("\"%s\"", str);
     evbuffer_add(cp->m_outputBuffer, str, strlen(str));
     evbuffer_add_printf(cp->m_outputBuffer, "%s:%d\r\n", config.myAddr, config.myPort);
 

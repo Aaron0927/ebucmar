@@ -1,6 +1,6 @@
-me localhost#11101
-coordinators localhost#11111
-coordinators localhost#11114
+me 10.0.1.1#11101
+coordinators 10.0.1.1#11111
+coordinators 10.107.19.9#11114
 coordinators localhost#11118
-coordinators localhost#11121
+coordinators 10.107.19.8#11121
 coordinators localhost#11124

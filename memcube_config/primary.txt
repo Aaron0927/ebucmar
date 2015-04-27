@@ -1,5 +1,4 @@
-primary localhost#11111
-backups localhost#11114
-backups localhost#11118
-pings localhost#11121
-coordinators localhost#11101
+primary 10.0.1.1#11111
+backups 10.107.19.9#11114
+pings 10.107.19.8#11121
+coordinators 10.0.1.1#11101

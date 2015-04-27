@@ -22,6 +22,8 @@
 #include <sys/uio.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include "time.h"
+#include <sys/timeb.h>
 
 /* some POSIX systems need the following definition
  * to get mlockall flags out of sys/mman.h.  */
@@ -49,6 +51,7 @@
 #include "Segment.h"
 #include "ramcube.h"
 #include <pthread.h>
+
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
 #ifndef IOV_MAX
 #if defined(__FreeBSD__) || defined(__APPLE__)
@@ -3589,7 +3592,13 @@ static enum try_read_result try_read_udp(conn *c) {
     }
     return READ_NO_DATA_RECEIVED;
 }
-
+/*
+static long long getSystemTime() {
+    struct timeb t;
+    ftime(&t);
+    return 1000 * t.time + t.millitm;
+}
+*/
 /*
  * read from network as much as we can, handle buffer overflow and connection
  * close.
@@ -3626,6 +3635,7 @@ static enum try_read_result try_read_network(conn *c) {
                     fprintf(stderr, "Couldn't realloc input buffer\n");
                 c->rbytes = 0; /* ignore what we read */
                 out_string(c, "SERVER_ERROR out of memory reading request");
+                printf("error111!!!!!!!!!!!!\n");
                 c->write_and_go = conn_closing;
                 return READ_MEMORY_ERROR;
             }
@@ -3635,7 +3645,16 @@ static enum try_read_result try_read_network(conn *c) {
 
         int avail = c->rsize - c->rbytes;
         memset(c->rbuf + c->rbytes, 0, avail);
+
+        //long long start=getSystemTime();//test
+        //printf("start time: %lld ms\n", start);//test
         res = read(c->sfd, c->rbuf + c->rbytes, avail);
+        //long long end=getSystemTime();//test
+        //printf("++++++++++++++++spend time: %lld ms\n", end-start);//test
+        //printf("end time:%lld ms\n", end);
+        //printf("avail:%d\n",avail);
+        //printf("#####################  %c\n", (c->rbuf + c->rbytes)[0]);
+
         if (res > 0) {
             pthread_mutex_lock(&c->thread->stats.mutex);
             c->thread->stats.bytes_read += res;
@@ -3645,13 +3664,16 @@ static enum try_read_result try_read_network(conn *c) {
             if (res == avail) {
                 continue;
             } else {
+                printf("error222!!!!!!!!!!!!\n");
                 break;
             }
         }
         if (res == 0) {
+            printf("error333!!!!!!!!!!!!\n");
             return READ_ERROR;
         }
         if (res == -1) {
+            printf("error444!!!!!!!!!!!!\n");
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
             }

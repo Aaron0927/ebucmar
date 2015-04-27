@@ -26,7 +26,7 @@ void setCommandClient(char *com, Object *obj) {
 }
 
 Object setCommandServer(char *key, char *data, int nbyte) {
-    char buf[1024] =  "";
+    char buf[2048] =  "";
     char str[10];
     sprintf(str, "%d", nbyte);
     strcat(buf, "set ");
@@ -36,9 +36,10 @@ Object setCommandServer(char *key, char *data, int nbyte) {
     strcat(buf, "\r\n");
     strcat(buf, data);
     //clear Obj.command
-    memset(Obj.command, 0, 1024);
+    memset(Obj.command, 0, 2048);
     strcpy(Obj.command, buf);
     //memcpy(Obj.command, buf, strlen(buf));
     //free(buf);
+
     return Obj;
 }

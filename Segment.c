@@ -16,7 +16,7 @@
 Segment *recoverySubSeg; //receive a segment point when recovery
 SegmentManager *Manager;
 //! max segment is 8MB
-#define MAX_SEGMENT_CAPACITY   1024 * 1024 * 1024//1024 * 1024 * 8
+#define MAX_SEGMENT_CAPACITY   1024 * 1024//1024 * 1024 * 8
 /*
 Segment init_Segment(void) {
     Segment seg;
@@ -166,8 +166,8 @@ int getCommandLen(const char *cont, char *Iport, char *str) {
 void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) {
 
     SegmentManager *Iterator = Manager;
-    char command[1024] = "";
-    char IpPort[1024] = "";
+    char command[2048] = "";
+    char IpPort[2048] = "";
     char rip[16] = "";
 
     int flag1 = 0;
@@ -255,7 +255,7 @@ void appendToSegment(char *cont) {//, struct in_addr addr, unsigned short port) 
                     int flag3 = 1; //表示manager后面第一个segment
                     while(segIterator != NULL) {
                         Segment *temp = segIterator->next;
-                        printf("%d  @@@@@@@@@@@@@@@@\n", segIterator->header.capacity);
+                        printf("segIterator->header.capacity : %d  @@@@@@@@@@@@@@@@\n", segIterator->header.capacity);
                         if (segIterator->header.capacity < 0) { //8388585 just for test
                             persist(segIterator);
 
